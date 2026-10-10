@@ -32,7 +32,7 @@ jobs:
       - name: Install browsers for production smoke tests
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Build and verify both pages in Chromium, Firefox and WebKit
-        run: npm run test:dist
+        run: npm run test:dist -- --reporter=line,html
       - name: Audit application dependencies
         run: npm run audit:runtime
       - name: Upload production browser diagnostics
@@ -40,7 +40,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: production-browser-diagnostics
-          path: test-results/
+          path: |
+            test-results/
+            playwright-report/
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload the Pages build
@@ -64,11 +66,11 @@ jobs:
           - suite: editor
             name: Editor browser regressions
             browsers: chromium
-            command: npm run test:e2e -- --project chromium
+            command: npm run test:e2e -- --project chromium --reporter=line,html
           - suite: performance
             name: Isolated file switching performance
             browsers: chromium
-            command: npm run test:performance
+            command: npm run test:performance -- --reporter=line,html
     steps:
       - name: Check out the source
         uses: actions/checkout@v7
@@ -97,7 +99,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: browser-${{ matrix.suite }}
-          path: test-results/
+          path: |
+            test-results/
+            playwright-report/
           if-no-files-found: ignore
           retention-days: 7
 
