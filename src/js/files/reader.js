@@ -88,6 +88,7 @@ export class ProjectReader {
   constructor(project) {
     this.project = project;
     this.textReads = new WeakMap();
+    this.snapshots = new WeakMap();
     this.prefetchQueue = [];
     this.prefetchActive = 0;
     this.previewCache = new Map();
@@ -131,6 +132,12 @@ export class ProjectReader {
    * @param {Iterable<string>} paths - Project paths affected by this operation.
    */
   prefetchVisibleFiles(paths) {
+    if (this.project.dirHandle) {
+      this.cancel();
+
+      return;
+    }
+
     this.prefetchQueue = [
       ...paths,
     ]
@@ -189,7 +196,7 @@ export class ProjectReader {
    */
   async readNode(node, suppliedFile = null, isBackground = false) {
     const projectVersion = this.project.projectVersion;
-    const file = suppliedFile || (await node.handle.getFile());
+    const file = suppliedFile || (await this.snapshot(node));
 
     if (isBackground && projectVersion !== this.project.projectVersion) {
       return null;
@@ -207,6 +214,27 @@ export class ProjectReader {
     }
 
     return this.sharedRead(node, { file, type, projectVersion, isBackground });
+  }
+  /**
+   * Share in-flight metadata requests without retaining stale snapshots.
+   *
+   * @param {object} node - Project node whose file snapshot is needed.
+   * @returns {Promise<File>} Current native file snapshot.
+   */
+  async snapshot(node) {
+    const pending = this.snapshots.get(node);
+
+    if (pending) {
+      return await pending;
+    }
+
+    const request = node.handle.getFile();
+    this.snapshots.set(node, request);
+    try {
+      return await request;
+    } finally {
+      this.snapshots.delete(node);
+    }
   }
   /**
    * Reuse matching text or preview data for the current file.
@@ -349,7 +377,7 @@ export class ProjectReader {
    * @returns {Promise<string>} Searchable text, with binary file contents omitted.
    */
   async readSearchText(node) {
-    const file = await node.handle.getFile();
+    const file = await this.snapshot(node);
 
     if (
       /^(image|audio|video)\//.test(file.type) ||

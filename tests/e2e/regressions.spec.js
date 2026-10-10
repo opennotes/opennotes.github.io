@@ -67,3 +67,38 @@ test("saved and renamed gitignore updates the native project through the UI", as
     }, name);
   }
 });
+
+test("opening a native file announces the read without loading its neighbours", async ({ page }) => {
+  await page.goto("/edit.html");
+  await page.waitForFunction(() => document.querySelector(".app")?.dataset.ready === "true");
+  await page.evaluate(async () => {
+    const { application } = await import("/js/entries/editor.js");
+    const c = application.getControllerForElementAndIdentifier(document.querySelector(".app"), "workspace");
+    c.dismissBanner();
+    c.apiOk = false;
+    c.project.dirHandle = {};
+    globalThis.diskReads = [];
+    for (const name of ["Selected.md", "Neighbour.md"]) {
+      const handle = {
+        getFile() {
+          globalThis.diskReads.push(name);
+          return new Promise((resolve) => {
+            globalThis.finishDiskRead = () => resolve(new File(["Small note"], name));
+          });
+        },
+      };
+      c.project.nodes.set(name, { kind: "file", name, parentPath: "", handle });
+    }
+    c.prepareTree();
+    c.tree.renderTree();
+  });
+  await expect(page.locator('[data-workspace-target="opening"]')).toBeHidden();
+  await page.locator('.tree-item[data-path="Selected.md"] .label').click();
+  await expect(page.locator('[data-workspace-target="opening"]')).toHaveText("Открываем Selected.md…");
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
+  expect(await page.evaluate(() => globalThis.diskReads)).toEqual(["Selected.md"]);
+  await page.evaluate(() => globalThis.finishDiskRead());
+  await expect(page.locator(".cm-content")).toHaveText("Small note");
+  await expect(page.locator('[data-workspace-target="opening"]')).toBeHidden();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+});

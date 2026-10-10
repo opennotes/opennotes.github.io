@@ -74,3 +74,53 @@ it("prunes cached previews and queued reads for files removed by rules", async (
   expect(reader.previewCacheBytes).toBe(3);
   expect(reader.prefetchQueue).toEqual([b]);
 });
+
+it("does not read native files merely because their folder becomes visible", async () => {
+  const project = new Project();
+  project.dirHandle = {};
+  const reader = new ProjectReader(project);
+  const handle = fileHandle("A.md", "cold disk");
+  const node = { name: handle.name, kind: "file", handle };
+  project.nodes.set(node.name, node);
+  const snapshot = vi.spyOn(handle, "getFile");
+  reader.prefetchQueue = [node];
+  reader.prefetchVisibleFiles([node.name]);
+  expect(reader.prefetchQueue).toEqual([]);
+  expect(snapshot).not.toHaveBeenCalled();
+  const result = await reader.readNode(node);
+  expect(result.text).toBe("cold disk");
+  expect(snapshot).toHaveBeenCalledTimes(1);
+});
+it("shares pending snapshots, then checks metadata again to detect external changes", async () => {
+  const reader = new ProjectReader(new Project());
+  const handle = fileHandle("A.md", "old");
+  const file = await handle.getFile();
+  let release;
+  const snapshot = vi.spyOn(handle, "getFile").mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const node = { name: handle.name, handle };
+  const opening = reader.readNode(node);
+  const search = reader.readSearchText(node);
+  expect(snapshot).toHaveBeenCalledTimes(1);
+  release(file);
+  const opened = await opening;
+  expect(opened.text).toBe("old");
+  expect(await search).toBe("old");
+  handle.change("new");
+  const changed = await reader.readNode(node);
+  expect(changed.text).toBe("new");
+  expect(snapshot).toHaveBeenCalledTimes(2);
+});
+it("retries failed metadata requests", async () => {
+  const reader = new ProjectReader(new Project());
+  const handle = fileHandle("A.md", "retry");
+  const node = { name: handle.name, handle };
+  vi.spyOn(handle, "getFile").mockRejectedValueOnce(new Error("disk"));
+  await expect(reader.readNode(node)).rejects.toThrow("disk");
+  const retried = await reader.readNode(node);
+  expect(retried.text).toBe("retry");
+});

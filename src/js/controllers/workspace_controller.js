@@ -2,6 +2,7 @@ import { Controller } from "@hotwired/stimulus";
 
 import { Project } from "../files/project.js";
 import { ProjectReader } from "../files/reader.js";
+import { OpeningFeedback } from "../ui/opening.js";
 
 /**
  * Report whether native file pickers are available in a secure context.
@@ -49,6 +50,8 @@ export default class WorkspaceController extends Controller {
     "directoryInput",
     "resumeButton",
     "placeholder",
+    "opening",
+    "content",
   ];
 
   /**
@@ -132,6 +135,7 @@ export default class WorkspaceController extends Controller {
   connect() {
     this.bannerDismissed = false;
     this.openVersion = 0;
+    this.opening = new OpeningFeedback(this.openingTarget, this.contentTarget);
     this.toastTimer = null;
     this.apiOk = hasFSAccess() && globalThis.isSecureContext && location.protocol !== "file:";
     if (!this.apiOk) {
@@ -174,6 +178,7 @@ export default class WorkspaceController extends Controller {
    */
   disconnect() {
     this.openVersion++;
+    this.opening.clear();
     this.reader.cancel();
     this.project.projectVersion++;
     this.project.currentPath = null;
@@ -572,6 +577,20 @@ export default class WorkspaceController extends Controller {
    * @param {object} handle - Native file system handle.
    */
   async loadNativeWorkspace(handle) {
+    const version = this.opening.begin(`Открываем ${handle.name}…`);
+
+    try {
+      await this.readNativeWorkspace(handle);
+    } finally {
+      this.opening.finish(version);
+    }
+  }
+  /**
+   * Enumerate an authorized workspace before rendering its tree.
+   *
+   * @param {object} handle - Native file system handle.
+   */
+  async readNativeWorkspace(handle) {
     this.editor.closeEditor();
     this.project.nodes.clear();
     this.tree.reset();
@@ -743,13 +762,29 @@ export default class WorkspaceController extends Controller {
 
     if (this.project.currentPath === path) {
       this.openVersion++;
+      this.opening.clear();
       this.closeSidebar();
 
       return;
     }
 
     const version = ++this.openVersion;
+    const feedback = this.opening.begin(`Открываем ${node.name}…`);
 
+    try {
+      await this.readSelectedNode(path, node, version);
+    } finally {
+      this.opening.finish(feedback);
+    }
+  }
+  /**
+   * Commit a selected file only while its read still owns the selection.
+   *
+   * @param {string} path - Selected project-relative path.
+   * @param {object} node - File node captured before reading.
+   * @param {number} version - Ownership token for this selection.
+   */
+  async readSelectedNode(path, node, version) {
     try {
       const result = await this.reader.readNode(node);
 

@@ -1,0 +1,23 @@
+.opening-feedback {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  z-index: 100;
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  margin-inline: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--label);
+  white-space: nowrap;
+  background: var(--bg-elevated);
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
+}
+
+.opening-feedback[hidden] {
+  display: none;
+}
