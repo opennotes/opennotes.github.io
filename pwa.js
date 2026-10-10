@@ -12,6 +12,12 @@
   const nativeInstall = document.querySelector('[data-native-install]');
   const installButton = document.querySelector('[data-install-app]');
   const installFallback = document.querySelector('[data-install-fallback]');
+  installFallback?.addEventListener('click', event => {
+    if (!guide) return;
+    event.preventDefault();
+    guide.hidden = false;
+    guide.focus();
+  });
   const installStatus = document.querySelector('[data-install-status]');
   const setStatus = text => { if (installStatus) installStatus.textContent = text; };
   let useNativeInstall = !!nativeInstall && 'HTMLInstallElement' in window && window.isSecureContext && location.protocol !== 'file:';

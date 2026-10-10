@@ -989,10 +989,10 @@
             </button>
           </div>
           <div class="install-tip" data-install-tip hidden>
-            <p data-install-guide hidden>В Safari: <strong>Файл → Добавить в Dock</strong>. В Chrome: нажмите значок установки в адресной строке.</p>
+            <p id="install-guide" data-install-guide tabindex="-1" hidden>В Safari: <strong>Файл → Добавить в Dock</strong>. В Chrome: нажмите значок установки в адресной строке.</p>
             <install data-native-install>
               <button type="button" class="btn btn-filled" data-install-app hidden>Установить Open Notes</button>
-              <a class="btn btn-plain" href="index.html#install" data-install-fallback>Установить приложение</a>
+              <a class="btn btn-plain" href="#install-guide" data-install-fallback>Установить приложение</a>
             </install>
             <p data-install-status role="status"></p>
           </div>
