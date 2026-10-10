@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/app-icon-180.png" />
+    <meta name="apple-mobile-web-app-title" content="Open Notes" />
+    <title>Open Notes</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg%20width%3D%2226%22%20height%3D%2226%22%20viewBox%3D%220%200%2026%2026%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cstyle%3E%3Aroot%20%7B%20color%3A%20%23000%3B%20%7D%20%40media%20%28prefers-color-scheme%3A%20dark%29%20%7B%20%3Aroot%20%7B%20color%3A%20%23fff%3B%20%7D%20%7D%3C%2Fstyle%3E%0A%3Cpath%20d%3D%22M22.28%2012.9564C23.5935%2011.6429%2024.3314%209.86144%2024.3314%208.00389C24.3314%206.14634%2023.5935%204.36488%2022.28%203.05139C20.9665%201.73791%2019.185%201%2017.3275%201C15.47%201%2013.6885%201.73791%2012.375%203.05139L4.5%2010.9264V20.8431H14.4167L22.28%2012.9564Z%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M17.3333%208.00977L1%2024.3431%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M19.0832%2016.1763H9.1665%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3C%2Fsvg%3E"
+    />
+    <link rel="stylesheet" href="/css/editor.css" />
+  </head>
+  <body>
+    <div
+      class="app"
+      id="workspace"
+      data-controller="workspace tree editor search"
+      data-workspace-tree-outlet="#workspace"
+      data-workspace-editor-outlet="#workspace"
+      data-workspace-search-outlet="#workspace"
+      data-tree-workspace-outlet="#workspace"
+      data-editor-workspace-outlet="#workspace"
+      data-search-workspace-outlet="#workspace"
+      data-workspace-fallback-class="fallback-mode"
+      data-workspace-visible-class="visible"
+      data-workspace-open-class="open"
+      data-workspace-toast-visible-class="show"
+      data-workspace-saved-class="saved"
+      data-workspace-saving-class="saving"
+      data-workspace-error-class="error"
+      data-tree-active-class="active"
+      data-tree-expanded-class="open"
+      data-tree-directory-class="dir"
+      data-tree-drop-target-class="drop-target"
+      data-tree-root-drop-target-class="root-drop-target"
+      data-editor-preview-class="preview-mode"
+      data-action="tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions"
+      data-workspace-target="app"
+    >
+      <div class="banner" data-workspace-target="banner" role="alert">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <div>
+          <strong>Автосохранение недоступно.</strong>
+          Сохраняйте изменения кнопкой «Скачать».
+        </div>
+        <button
+          type="button"
+          class="banner-close"
+          data-action="workspace#dismissBanner"
+          aria-label="Закрыть предупреждение"
+          title="Закрыть"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="unsupported" data-workspace-target="unsupported">
+        <div class="icon-wrap">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+            />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+        <h1>Браузер не поддерживает работу с файлами</h1>
+        <p>
+          Приложение сохраняет Markdown на диск через File System Access API. Без него открытие папок и
+          автосохранение недоступны.
+        </p>
+        <ul>
+          <li>Chrome, Edge, Opera — поддерживают</li>
+          <li>Нужен <code>localhost</code> или HTTPS</li>
+          <li>Safari и Firefox — API пока нет</li>
+        </ul>
+        <p style="margin-top: 8px; font-size: 13px; color: var(--label-tertiary)">
+          Пример: <code>npx serve .</code>
+        </p>
+      </div>
+
+      <div class="mobile-bar">
+        <button type="button" class="icon-btn" data-action="workspace#toggleSidebar" aria-label="Файлы">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+          >
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <span class="title" data-workspace-target="mobileTitle">Open Notes</span>
+        <span style="width: 44px"></span>
+      </div>
+
+      <div class="overlay" data-workspace-target="overlay" data-action="click->workspace#closeSidebar"></div>
+
+      <aside class="sidebar" data-workspace-target="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-top">
+            <span
+              class="sidebar-title"
+              data-workspace-target="rootName"
+              data-action="dragover->tree#rootDragOver dragleave->tree#rootDragLeave drop->tree#rootDrop"
+              >Open Notes</span
+            >
+            <div class="sidebar-controls">
+              <div class="sidebar-actions">
+                <button
+                  type="button"
+                  class="icon-btn"
+                  data-workspace-target="openButton"
+                  data-action="workspace#toggleOpenMenu"
+                  aria-label="Открыть"
+                  title="Открыть файл или папку"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-controls="open-menu"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v2" />
+                    <path d="M3 7h16a2 2 0 0 1 1.94 2.49l-2 8A2 2 0 0 1 17 19H5a2 2 0 0 1-2-2V7z" />
+                  </svg>
+                </button>
+                <div id="open-menu" class="open-menu" data-workspace-target="openMenu" hidden>
+                  <button type="button" data-action="workspace#openFile">Файл…</button>
+                  <button type="button" data-action="workspace#openDirectory">Папку…</button>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="icon-btn"
+                data-action="search#openSearch"
+                aria-label="Поиск по проекту"
+                title="Поиск по проекту · Shift Shift"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                >
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="m16 16 4.5 4.5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="icon-btn close-sidebar"
+                data-action="workspace#closeSidebar"
+                aria-label="Закрыть"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="m6 6 12 12M6 18 18 6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="tree"
+          data-tree-target="tree"
+          data-action="dragover->tree#rootDragOver dragleave->tree#rootDragLeave drop->tree#rootDrop"
+        >
+          <div class="tree-empty" data-tree-target="empty">Нажмите «Открыть» и выберите файл или папку</div>
+        </div>
+
+        <div class="sidebar-footer">
+          <span title="Поиск по проекту">Shift Shift</span>
+          <div class="status">
+            <span class="status-dot" data-workspace-target="statusDot"></span>
+            <span data-workspace-target="statusText">Готово</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div
+          class="toolbar"
+          data-editor-target="toolbar"
+          data-action="mousedown->editor#keepEditorSelection"
+          hidden
+        >
+          <div class="toolbar-group">
+            <button
+              type="button"
+              class="tool-btn"
+              title="Заголовок 1"
+              data-action="editor#headingOne"
+              aria-label="Заголовок 1"
+            >
+              H1
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              title="Заголовок 2"
+              data-action="editor#headingTwo"
+              aria-label="Заголовок 2"
+            >
+              H2
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              title="Заголовок 3"
+              data-action="editor#headingThree"
+              aria-label="Заголовок 3"
+            >
+              H3
+            </button>
+          </div>
+          <div class="toolbar-group">
+            <button
+              type="button"
+              class="tool-btn"
+              title="Жирный"
+              data-action="editor#bold"
+              aria-label="Жирный"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M7 5h6a3.5 3.5 0 0 1 0 7H7V5Zm0 7h7a3.5 3.5 0 0 1 0 7H7v-7Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              title="Курсив"
+              data-action="editor#italic"
+              aria-label="Курсив"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M10 5h8M6 19h8M14 5l-4 14" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              title="Ссылка"
+              data-action="editor#link"
+              aria-label="Ссылка"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="m10 14 4-4m-5 6-2 2a4.24 4.24 0 0 1-6-6l4-4a4.24 4.24 0 0 1 6 0m2 0 2-2a4.24 4.24 0 0 1 6 6l-4 4a4.24 4.24 0 0 1-6 0"
+                />
+              </svg>
+            </button>
+          </div>
+          <div class="toolbar-group">
+            <button
+              type="button"
+              class="tool-btn"
+              title="Цитата"
+              data-action="editor#quote"
+              aria-label="Цитата"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 5v14M9 7h11M9 12h11M9 17h7" />
+              </svg>
+            </button>
+            <button type="button" class="tool-btn" title="Код" data-action="editor#code" aria-label="Код">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="m8 7-5 5 5 5m8-10 5 5-5 5" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              title="Список"
+              data-action="editor#list"
+              aria-label="Список"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M9 6h11M9 12h11M9 18h11" />
+                <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
+                <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
+                <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="tool-btn"
+              title="Нумерованный"
+              data-action="editor#orderedList"
+              aria-label="Нумерованный список"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M10 7h10M10 17h10M3 4h1v6M3 10h2M3 16a1.5 1.5 0 0 1 3 0c0 1-1 2-3 4h3" />
+              </svg>
+            </button>
+          </div>
+          <div class="file-info">
+            <span class="file-path" data-editor-target="pathLabel"></span>
+            <button
+              type="button"
+              class="icon-btn download-btn"
+              data-editor-target="download"
+              data-action="editor#downloadFile"
+              aria-label="Скачать"
+              title="Скачать файл"
+              hidden
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor-wrap">
+          <div class="placeholder" data-workspace-target="placeholder">
+            <div class="placeholder-icon">
+              <svg
+                width="70"
+                height="70"
+                viewBox="0 0 70 70"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <rect width="70" height="70" rx="19" fill="var(--bg-elevated)" />
+                <path
+                  d="M44.6145 35.285C45.928 33.9715 46.6659 32.1901 46.6659 30.3325C46.6659 28.475 45.928 26.6935 44.6145 25.38C43.301 24.0665 41.5195 23.3286 39.662 23.3286C37.8044 23.3286 36.023 24.0665 34.7095 25.38L26.8345 33.255V43.1717H36.7511L44.6145 35.285Z"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke="currentColor"
+                />
+                <path
+                  d="M39.6678 30.3384L23.3345 46.6717"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke="currentColor"
+                />
+                <path
+                  d="M41.4176 38.5049H31.501"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke="currentColor"
+                />
+                <mask
+                  id="placeholder-logo-mask"
+                  style="mask-type: alpha"
+                  maskUnits="userSpaceOnUse"
+                  x="0"
+                  y="0"
+                  width="70"
+                  height="70"
+                >
+                  <rect width="70" height="70" rx="19" fill="white" />
+                </mask>
+                <g mask="url(#placeholder-logo-mask)">
+                  <path
+                    d="M49.5294 49.2126C31.6302 57.3802 24.2582 78.5209 20.9535 91.1662C19.8085 95.5472 23.8079 103.04 28.3001 103.609C41.9106 105.334 66.5472 105.575 86.9475 101.134C114.666 95.0996 97.9985 57.893 99.0461 44.9272C99.087 44.421 99.1087 43.9609 99.0342 43.4585C95.9973 22.9852 60.4157 -42.0671 61.1319 -24.8985C62.038 -3.17768 79.4059 35.5796 49.5294 49.2126Z"
+                    fill="url(#placeholder-logo-shading)"
+                    fill-opacity="0.4"
+                  />
+                </g>
+                <defs>
+                  <linearGradient
+                    id="placeholder-logo-shading"
+                    x1="-71.1548"
+                    y1="-58.2782"
+                    x2="-0.0818216"
+                    y2="114.192"
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <stop stop-color="currentColor" />
+                    <stop offset="1" stop-color="currentColor" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h1>Open Notes</h1>
+            <p>Откройте папку или файл. Редактор с автосохранением на диск.</p>
+            <button
+              type="button"
+              class="quiet-action resume-project"
+              data-workspace-target="resumeButton"
+              data-action="workspace#resumeWorkspace"
+              hidden
+            ></button>
+            <div class="actions">
+              <button type="button" class="btn btn-filled" data-action="workspace#openDirectory">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+                Открыть папку
+              </button>
+              <button type="button" class="btn btn-plain" data-action="workspace#openFile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6" />
+                </svg>
+                Открыть файл
+              </button>
+            </div>
+            <div class="install-tip" data-install-tip hidden>
+              <p id="install-guide" data-install-guide tabindex="-1" hidden>
+                В Safari: <strong>Файл → Добавить в Dock</strong>. В Chrome: нажмите значок установки в
+                адресной строке.
+              </p>
+              <install data-native-install>
+                <button type="button" class="quiet-action" data-install-app hidden>
+                  Установить Open Notes
+                </button>
+                <a class="quiet-action" href="#install-guide" data-install-fallback>Установить приложение</a>
+              </install>
+              <p data-install-status role="status"></p>
+            </div>
+          </div>
+          <div class="editor-host" data-editor-target="editor" hidden></div>
+        </div>
+      </main>
+
+      <div class="context-menu" data-tree-target="contextMenu" hidden>
+        <button type="button" data-action="tree#renameSelected">Переименовать…</button>
+        <button type="button" class="danger" data-action="tree#deleteSelected">Удалить…</button>
+      </div>
+      <dialog data-tree-target="actionDialog">
+        <form class="dialog-body" data-action="submit->tree#submitAction">
+          <h2 data-tree-target="actionTitle"></h2>
+          <p data-tree-target="actionDescription"></p>
+          <input
+            class="dialog-input"
+            data-tree-target="actionInput"
+            aria-label="Новое имя"
+            autocomplete="off"
+          />
+          <div class="dialog-error" data-tree-target="actionError" role="alert"></div>
+          <div class="dialog-footer">
+            <button type="button" class="btn btn-plain" data-action="tree#cancelAction">Отмена</button>
+            <button type="submit" class="btn btn-filled" data-tree-target="actionSubmit"></button>
+          </div>
+        </form>
+      </dialog>
+      <dialog class="project-search" data-search-target="searchDialog" aria-label="Поиск по проекту">
+        <div class="search-header">
+          <input
+            type="search"
+            class="dialog-input"
+            placeholder="Имя файла или текст в проекте…"
+            aria-label="Поиск по проекту"
+            data-search-target="searchInput"
+            data-action="input->search#queueSearch keydown->search#searchKey"
+          />
+          <button
+            type="button"
+            class="btn btn-plain"
+            data-action="search#closeSearch"
+            aria-label="Закрыть поиск"
+          >
+            Esc
+          </button>
+        </div>
+        <div
+          class="search-results"
+          data-search-target="searchResults"
+          role="listbox"
+          aria-label="Результаты поиска"
+        ></div>
+        <div class="search-info" data-search-target="searchInfo" role="status">
+          ↑ ↓ выбор · Enter открыть · Esc закрыть
+        </div>
+      </dialog>
+      <input
+        type="file"
+        data-workspace-target="fileInput"
+        data-action="change->workspace#importFiles"
+        hidden
+      />
+      <input
+        type="file"
+        data-workspace-target="directoryInput"
+        data-action="change->workspace#importFiles"
+        webkitdirectory
+        multiple
+        hidden
+      />
+      <div class="toast" data-workspace-target="toast" role="status" hidden></div>
+    </div>
+    <script type="module" src="/js/entries/install.js"></script>
+    <script type="module" src="/js/entries/editor.js"></script>
+  </body>
+</html>

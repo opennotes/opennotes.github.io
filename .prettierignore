@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+.playwright-cli
+playwright-report
+test-results
+
+.vitest-attachments/
+tests/__screenshots__/

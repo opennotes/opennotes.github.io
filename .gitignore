@@ -1,3 +1,9 @@
 .DS_Store
 .playwright-cli/
 node_modules/
+coverage/
+playwright-report/
+test-results/
+
+.vitest-attachments/
+tests/__screenshots__/
