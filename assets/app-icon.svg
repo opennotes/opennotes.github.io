@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="0 0 70 70" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Open Notes">
+            <rect width="70" height="70" rx="19" fill="#ffffff"/>
+            <path d="M44.6145 35.285C45.928 33.9715 46.6659 32.1901 46.6659 30.3325C46.6659 28.475 45.928 26.6935 44.6145 25.38C43.301 24.0665 41.5195 23.3286 39.662 23.3286C37.8044 23.3286 36.023 24.0665 34.7095 25.38L26.8345 33.255V43.1717H36.7511L44.6145 35.285Z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="#171719"/>
+            <path d="M39.6678 30.3384L23.3345 46.6717" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="#171719"/>
+            <path d="M41.4176 38.5049H31.501" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="#171719"/>
+            <mask id="placeholder-logo-mask" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="70" height="70">
+            <rect width="70" height="70" rx="19" fill="white"/>
+            </mask>
+            <g mask="url(#placeholder-logo-mask)">
+            <path d="M49.5294 49.2126C31.6302 57.3802 24.2582 78.5209 20.9535 91.1662C19.8085 95.5472 23.8079 103.04 28.3001 103.609C41.9106 105.334 66.5472 105.575 86.9475 101.134C114.666 95.0996 97.9985 57.893 99.0461 44.9272C99.087 44.421 99.1087 43.9609 99.0342 43.4585C95.9973 22.9852 60.4157 -42.0671 61.1319 -24.8985C62.038 -3.17768 79.4059 35.5796 49.5294 49.2126Z" fill="url(#placeholder-logo-shading)" fill-opacity="0.4"/>
+            </g>
+            <defs>
+            <linearGradient id="placeholder-logo-shading" x1="-71.1548" y1="-58.2782" x2="-0.0818216" y2="114.192" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#171719"/>
+            <stop offset="1" stop-color="#171719" stop-opacity="0"/>
+            </linearGradient>
+            </defs>
+            </svg>
