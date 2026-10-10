@@ -564,8 +564,15 @@
 
     .editor-host { height: 100%; }
     .file-object { display: block; width: 100%; height: 100%; border: 0; background: var(--bg-grouped); object-fit: contain; }
-    .object-fallback { padding: 32px; text-align: center; color: var(--label-secondary); }
-    .object-fallback a { color: var(--accent); }
+    .object-fallback { display: grid; place-items: center; height: 100%; overflow: auto; padding: 24px; text-align: center; background: var(--bg); }
+    .object-fallback-content { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 300px; }
+    .object-fallback-icon { color: var(--label-tertiary); margin-bottom: 4px; }
+    .object-fallback-icon .ico { display: block; width: 40px; height: 40px; stroke-width: 1.25; }
+    .object-fallback h2 { font-size: 17px; font-weight: 600; letter-spacing: -.02em; color: var(--label); }
+    .object-fallback-name { max-width: 100%; font-size: 12px; color: var(--label-secondary); overflow-wrap: anywhere; }
+    .object-fallback-description { font-size: 13px; line-height: 1.5; color: var(--label-secondary); text-wrap: balance; }
+    .object-fallback .btn { margin-top: 6px; text-decoration: none; }
+    .object-fallback .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     .toolbar.preview-mode .toolbar-group { display: none; }
     .editor-host[hidden] { display: none !important; }
 
@@ -1643,13 +1650,27 @@
         object.setAttribute('aria-label', 'Просмотр: ' + this.nodes.get(this.currentPath).name);
         const fallback = document.createElement('div');
         fallback.className = 'object-fallback';
+        const content = document.createElement('div');
+        content.className = 'object-fallback-content';
+        const icon = document.createElement('span');
+        icon.className = 'object-fallback-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.innerHTML = ICO.file;
+        const heading = document.createElement('h2');
+        heading.textContent = 'Нет предпросмотра';
+        const name = document.createElement('p');
+        name.className = 'object-fallback-name';
+        name.textContent = this.nodes.get(this.currentPath).name;
         const message = document.createElement('p');
-        message.textContent = 'Браузер не поддерживает встроенный просмотр этого формата.';
+        message.className = 'object-fallback-description';
+        message.textContent = 'Скачайте файл, чтобы открыть его в другом приложении.';
         const link = document.createElement('a');
         link.href = this.previewUrl;
         link.download = this.nodes.get(this.currentPath).name;
+        link.className = 'btn btn-plain';
         link.textContent = 'Скачать файл';
-        fallback.append(message, link);
+        content.append(icon, heading, name, message, link);
+        fallback.append(content);
         object.append(fallback);
         this.editorTarget.replaceChildren(object);
       }
@@ -1973,6 +1994,8 @@
               object?.setAttribute('aria-label', 'Просмотр: ' + this.nodes.get(this.currentPath).name);
               const link = object?.querySelector('a');
               if (link) link.download = this.nodes.get(this.currentPath).name;
+              const name = object?.querySelector('.object-fallback-name');
+              if (name) name.textContent = this.nodes.get(this.currentPath).name;
             }
           }
           if (!this.workspaceIsDirectory) this.rootNameTarget.textContent = newName;
