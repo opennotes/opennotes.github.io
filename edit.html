@@ -148,6 +148,10 @@
       .app.fallback-mode .main { grid-row: 3; }
     }
     .banner svg { flex-shrink: 0; margin-top: 1px; opacity: 0.9; }
+    .banner-close { flex: 0 0 44px; width: 44px; height: 44px; display: grid; place-items: center; margin: -8px -10px -8px 0; border-radius: var(--radius-sm); color: var(--banner-text); }
+    .banner-close:hover { background: var(--bg-fill); }
+    .banner-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .banner-close svg { margin: 0; }
     .banner strong { font-weight: 600; }
     .banner details { margin-top: 6px; }
     .banner summary { cursor: pointer; font-weight: 600; }
@@ -166,61 +170,7 @@
     .save-help { width: 100%; min-width: 0; }
     .save-help-title { display: block; margin-bottom: 3px; }
     .save-help-description { color: var(--label-secondary); }
-    .save-help details { margin-top: 10px; }
-    .save-help summary { width: fit-content; color: var(--accent); padding: 2px 0; }
-    .save-help summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
-    .save-help-body { max-height: min(280px, 35dvh); overflow: auto; margin-top: 12px; }
-    .save-help .save-steps {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      max-width: 960px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      counter-reset: save-step;
-    }
-    .save-steps li {
-      position: relative;
-      padding: 12px 12px 12px 42px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--separator);
-      border-radius: var(--radius-sm);
-      counter-increment: save-step;
-      text-wrap: pretty;
-    }
-    .save-help .save-steps li + li { margin-top: 0; }
-    .save-steps li::before {
-      content: counter(save-step);
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      display: grid;
-      place-items: center;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: var(--bg-fill);
-      font-size: 11px;
-      font-weight: 600;
-    }
-    .save-steps strong { display: block; margin-bottom: 5px; }
-    .save-steps p, .save-help-note { color: var(--label-secondary); }
-    .save-command {
-      display: block;
-      margin-top: 8px;
-      padding: 8px;
-      border-radius: 5px;
-      background: var(--bg-fill);
-      font-size: 11px;
-      white-space: nowrap;
-      overflow-x: auto;
-      text-wrap: nowrap;
-    }
-    .save-help-note { max-width: 960px; margin-top: 10px; font-size: 12px; }
-    @media (max-width: 900px) {
-      .save-help .save-steps { grid-template-columns: 1fr; }
-    }
+
 
 
     .app {
@@ -835,9 +785,12 @@
         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
       <div>
-        <strong>File System Access API недоступен.</strong>
-        Откройте в Chrome, Edge или Opera по localhost / HTTPS.
+        <strong>Автосохранение недоступно.</strong>
+        Сохраняйте изменения кнопкой «Скачать».
       </div>
+      <button type="button" class="banner-close" data-action="workspace#dismissBanner" aria-label="Закрыть предупреждение" title="Закрыть">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
     </div>
 
     <div class="unsupported" data-workspace-target="unsupported">
@@ -1153,6 +1106,7 @@
       ];
 
       connect() {
+        this.bannerDismissed = false;
         this.operationBusy = false;
         this.projectVersion = 0;
         this.searchVersion = 0;
@@ -1210,39 +1164,40 @@
         document.removeEventListener("click", this._onClick);
       }
 
-      enableFallback() {
+      enableFallback(reason) {
         this.apiOk = false;
-        this.appTarget.classList.add("fallback-mode");
+        reason ||= !window.isSecureContext || location.protocol === "file:" ? "insecure" : "unsupported";
         const help = this.bannerTarget.querySelector("div");
         help.classList.add("save-help");
-        help.innerHTML = `
-          <strong class="save-help-title">Сохранение на диск недоступно</strong>
-          <p class="save-help-description">Файлы на диске пока не изменяются. Сохраняйте правки кнопкой «Скачать».</p>
-          <details>
-            <summary>Включить автосохранение</summary>
-            <div class="save-help-body">
-              <ol class="save-steps">
-                <li>
-                  <strong>Запустите приложение</strong>
-                  <p>Откройте терминал в папке с <code>edit.html</code> и выполните:</p>
-                  <code class="save-command">npx --yes serve . -l 3000</code>
-                </li>
-                <li>
-                  <strong>Откройте в браузере</strong>
-                  <p>В Chrome или Edge перейдите на <a href="http://localhost:3000/edit.html" target="_blank" rel="noopener">localhost:3000/edit.html</a>.</p>
-                </li>
-                <li>
-                  <strong>Разрешите сохранение</strong>
-                  <p>Нажмите «Открыть папку», выберите папку и разрешите изменение файлов.</p>
-                </li>
-              </ol>
-              <p class="save-help-note">Для запуска нужен Node.js. Оставьте терминал открытым, пока работаете.</p>
-              <p class="save-help-note">Уже открыли приложение через localhost или HTTPS? Используйте Chrome или Edge и заново откройте папку, разрешив изменение файлов.</p>
-            </div>
-          </details>`;
-        this.bannerTarget.classList.add("visible");
+        const messages = {
+          unsupported: ["Браузер не поддерживает автосохранение", "Сохраняйте изменения кнопкой «Скачать». Для записи прямо в папку используйте Chrome или Edge на компьютере."],
+          insecure: ["Автосохранение недоступно на этой странице", "Сохраняйте изменения кнопкой «Скачать». В Chrome или Edge на компьютере откройте приложение по HTTPS и разрешите доступ к папке."],
+          permission: ["Доступ к файлам ограничен", "Браузер не разрешил запись в папку. Откройте её заново и разрешите изменение файлов или сохраняйте правки кнопкой «Скачать»."],
+        };
+        const [title, description] = messages[reason];
+        help.replaceChildren();
+        const heading = document.createElement("strong");
+        heading.className = "save-help-title";
+        heading.textContent = title;
+        const paragraph = document.createElement("p");
+        paragraph.className = "save-help-description";
+        paragraph.textContent = description;
+        help.append(heading, paragraph);
+        if (!this.bannerDismissed) {
+          this.appTarget.classList.add("fallback-mode");
+          this.bannerTarget.classList.add("visible");
+        }
         this.placeholderTarget.querySelector("p").textContent =
           "Откройте папку или файл. После редактирования скачайте изменения.";
+      }
+
+      dismissBanner() {
+        this.bannerDismissed = true;
+        this.bannerTarget.classList.remove("visible");
+        this.appTarget.classList.remove("fallback-mode");
+        const focusTarget = matchMedia('(max-width: 768px)').matches
+          ? this.appTarget.querySelector('.mobile-bar button') : this.openButtonTarget;
+        focusTarget?.focus();
       }
 
       async importFiles(event) {
@@ -1421,7 +1376,7 @@
         } catch (e) {
           if (e.name === "AbortError") return;
           if (["SecurityError", "NotAllowedError"].includes(e.name)) {
-            this.enableFallback();
+            this.enableFallback("permission");
             this.showToast("Доступ к диску ограничен. Нажмите кнопку ещё раз для обычного выбора.", 7000);
             this.setStatus("Обычный выбор файлов", "error");
             return;
@@ -1454,7 +1409,7 @@
         } catch (e) {
           if (e.name === "AbortError") return;
           if (["SecurityError", "NotAllowedError"].includes(e.name)) {
-            this.enableFallback();
+            this.enableFallback("permission");
             this.showToast("Доступ к диску ограничен. Нажмите кнопку ещё раз для обычного выбора.", 7000);
             this.setStatus("Обычный выбор файлов", "error");
             return;
