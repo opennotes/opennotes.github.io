@@ -1,56 +1,150 @@
-name: Checks
+name: CI
+
 on:
   push:
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
-  group: checks-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
-  check:
-    runs-on: ubuntu-latest
+  static:
+    name: Static checks and production build
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - name: Check out the source
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium firefox webkit
-      - run: npm run check
-      - run: npm run audit:runtime
-      - uses: actions/upload-artifact@v7
+      - name: Install dependencies
+        run: npm ci
+      - name: Check formatting, lint rules and architecture policies
+        run: npm run format:check && npm run lint && npm run test:policies
+      - name: Install browsers for production smoke tests
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Build and verify both pages in Chromium, Firefox and WebKit
+        run: npm run test:dist
+      - name: Audit application dependencies
+        run: npm run audit:runtime
+      - name: Upload production browser diagnostics
         if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: coverage
-          path: coverage/
-      - uses: actions/upload-pages-artifact@v5
+          name: production-browser-diagnostics
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload the Pages build
+        uses: actions/upload-pages-artifact@v5
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
           path: dist/
+
+  browser:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: coverage
+            name: Unit tests and 100% coverage
+            browsers: ""
+            command: npm run coverage
+          - suite: editor
+            name: Editor browser regressions
+            browsers: chromium
+            command: npm run test:e2e -- --project chromium
+          - suite: performance
+            name: Isolated file switching performance
+            browsers: chromium
+            command: npm run test:performance
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install the required browser
+        if: matrix.browsers != ''
+        run: npx playwright install --with-deps ${{ matrix.browsers }}
+      - name: Run the independent test suite
+        run: ${{ matrix.command }}
+      - name: Upload coverage report
+        if: always() && matrix.suite == 'coverage'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload timings and browser diagnostics
+        if: always() && matrix.suite != 'coverage'
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-${{ matrix.suite }}
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
   toolchain:
     name: Node.js ${{ matrix.node }} compatibility
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         node: [22.13.0, 26.x]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - name: Check out the source
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
-      - run: npm run lint && npm run test:policies && npm run test && npm run build
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify lint, policies, unit tests and build
+        run: npm run lint && npm run test:policies && npm run test && npm run build
+
+  quality:
+    name: Complete quality gate
+    if: always()
+    needs: [static, browser, toolchain]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every independent check to pass
+        env:
+          STATIC_RESULT: ${{ needs.static.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          TOOLCHAIN_RESULT: ${{ needs.toolchain.result }}
+        run: |
+          test "$STATIC_RESULT" = success
+          test "$BROWSER_RESULT" = success
+          test "$TOOLCHAIN_RESULT" = success
+
   deploy:
+    name: Deploy GitHub Pages
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [check, toolchain]
-    runs-on: ubuntu-latest
+    needs: [quality]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
@@ -58,6 +152,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/configure-pages@v6
-      - id: deployment
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+      - name: Deploy the verified build
+        id: deployment
         uses: actions/deploy-pages@v5
