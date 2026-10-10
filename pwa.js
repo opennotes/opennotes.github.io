@@ -84,24 +84,17 @@
   if (location.protocol === 'file:') {
     setStatus('Установка доступна, когда Open Notes открыт по адресу сайта. Сейчас вы можете пользоваться редактором в браузере.');
   }
-  window.openNotesReady = Promise.resolve();
-  if (!('serviceWorker' in navigator) || !window.isSecureContext || location.protocol === 'file:') return;
-  const setup = (async () => {
-    const registration = await navigator.serviceWorker.register('sw.js', { scope: './' });
-    const announceUpdate = () => {
-      if (registration.waiting) setStatus('Обновление готово. Оно появится после закрытия всех окон Open Notes и следующего запуска.');
-    };
-    announceUpdate();
-    registration.addEventListener('updatefound', () => {
-      registration.installing?.addEventListener('statechange', announceUpdate);
-    });
-    await navigator.serviceWorker.ready;
-    if (!navigator.serviceWorker.controller) {
-      await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
-    }
-  })();
-  // A slow first download must not prevent the editor from opening online.
-  window.openNotesReady = Promise.race([setup, new Promise(resolve => setTimeout(resolve, 10000))]).catch(() => {
-    setStatus('Офлайн-режим пока не подготовлен. Подключитесь к сети и откройте приложение ещё раз.');
-  });
+  // Remove caches and registrations left by the previous release.
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    navigator.serviceWorker.getRegistrations().then(async registrations => {
+      const scopes = [new URL('./', location.href).href, new URL('/', location.href).href];
+      await Promise.all(registrations.filter(registration => scopes.includes(registration.scope)
+        && [registration.active, registration.waiting, registration.installing].some(worker => worker && new URL(worker.scriptURL).pathname.endsWith('/sw.js')))
+        .map(registration => registration.unregister()));
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(key => key.startsWith('open-notes-')).map(key => caches.delete(key)));
+      }
+    }).catch(() => {});
+  }
 })();
