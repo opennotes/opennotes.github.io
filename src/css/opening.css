@@ -1,7 +1,7 @@
 .opening-feedback {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: calc(16px + var(--safe-b));
   left: 16px;
   z-index: 100;
   width: fit-content;
