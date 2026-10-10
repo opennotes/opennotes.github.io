@@ -1135,6 +1135,10 @@
         this.editorSession = null;
         this.toastTimer = null;
         this.nodes = new Map();
+        this.prefetchQueue = [];
+        this.prefetchActive = 0;
+        this.previewCache = new Map();
+        this.previewCacheBytes = 0;
         this.expanded = new Set();
         this.currentPath = null;
         this.focusedPath = null;
@@ -1167,6 +1171,8 @@
 
       disconnect() {
         this.openVersion++;
+        this.prefetchQueue = [];
+        this.projectVersion++;
         this.resetPreview();
         this.view?.destroy();
         clearTimeout(this.saveTimer);
@@ -1280,6 +1286,9 @@
 
       prepareTree() {
         this.children = null;
+        this.prefetchQueue = [];
+        this.previewCache.clear();
+        this.previewCacheBytes = 0;
         this.projectVersion++;
         this.searchVersion++;
         this.expanded.clear();
@@ -1489,6 +1498,84 @@
           this.focusedPath = this.focusedTreeRow.dataset.path;
         }
         if (restoreFocus) this.focusTreeItem(this.focusedPath);
+        this.prefetchVisibleFiles();
+      }
+
+      prefetchVisibleFiles() {
+        // Read only files the user has revealed, not entire projects or .git.
+        this.prefetchQueue = [...this.treeRows.keys()].reverse()
+          .filter(path => !path.split('/').some(part => part.startsWith('.')))
+          .map(path => this.nodes.get(path))
+          .filter(node => node?.kind === 'file' && !node.readPromise && !node.searchCache && !this.previewCache.has(node))
+          .slice(0, 32);
+        this.runPrefetch();
+      }
+
+      runPrefetch() {
+        while (this.prefetchActive < 4 && this.prefetchQueue.length) {
+          const node = this.prefetchQueue.shift();
+          this.prefetchActive++;
+          this.readNode(node, null, true).catch(() => {}).finally(() => {
+            this.prefetchActive--;
+            this.runPrefetch();
+          });
+        }
+      }
+
+      async readNode(node, file = null, background = false) {
+        const projectVersion = this.projectVersion;
+        file ||= await node.handle.getFile();
+        if (background && projectVersion !== this.projectVersion) return null;
+        let type = this.previewType(file);
+        const matches = cache => cache?.size === file.size && cache.modified === file.lastModified;
+        if (node.text !== undefined && !type) return {
+          file, type: node.text.includes('\0') ? file.type || 'application/octet-stream' : null,
+          text: node.text,
+        };
+        if (!type && matches(node.searchCache)) return {
+          file, type: node.searchCache.text.includes('\0') ? file.type || 'application/octet-stream' : null,
+          text: node.searchCache.text,
+        };
+        const cached = this.previewCache.get(node);
+        if (type && matches(cached)) {
+          this.previewCache.delete(node);
+          this.previewCache.set(node, cached);
+          return { file: cached.file, type, text: null };
+        }
+        // Large media stays streamed; background work has a strict per-file limit.
+        const bufferPreview = type && /^(image\/|application\/pdf$)/.test(type) && file.size <= 8 * 1024 * 1024;
+        if (background && (file.size > 2 * 1024 * 1024 || (type && !bufferPreview))) return null;
+        if (node.readPromise) {
+          const result = await node.readPromise;
+          if (result.file.size === file.size && result.file.lastModified === file.lastModified) return result;
+          return this.readNode(node, file, background);
+        }
+        const promise = (async () => {
+          let text = null;
+          if (!type) {
+            text = await file.text();
+            node.searchCache = { size: file.size, modified: file.lastModified, text };
+            if (text.includes('\0')) type = file.type || 'application/octet-stream';
+          } else if (bufferPreview) {
+            // Native File blobs re-read the disk on every object navigation.
+            file = new File([await file.arrayBuffer()], file.name, { type, lastModified: file.lastModified });
+            if (projectVersion !== this.projectVersion) return { file, type, text };
+            const previous = this.previewCache.get(node);
+            this.previewCacheBytes -= previous?.size || 0;
+            this.previewCache.delete(node);
+            this.previewCache.set(node, { file, size: file.size, modified: file.lastModified });
+            this.previewCacheBytes += file.size;
+            while (this.previewCacheBytes > 32 * 1024 * 1024) {
+              const oldest = this.previewCache.keys().next().value;
+              this.previewCacheBytes -= this.previewCache.get(oldest).size;
+              this.previewCache.delete(oldest);
+            }
+          }
+          return { file, type, text };
+        })();
+        node.readPromise = promise;
+        try { return await promise; }
+        finally { if (node.readPromise === promise) node.readPromise = null; }
       }
 
       buildNode(node, level) {
@@ -1712,18 +1799,7 @@
         if (this.currentPath === path) { this.openVersion++; this.closeSidebar(); return; }
         const version = ++this.openVersion;
         try {
-          const file = await node.handle.getFile();
-          let type = this.previewType(file);
-          let text = null;
-          if (!type) {
-            if (node.text !== undefined) text = node.text;
-            else if (node.searchCache?.size === file.size && node.searchCache?.modified === file.lastModified) text = node.searchCache.text;
-            else {
-              text = await file.text();
-              node.searchCache = { size: file.size, modified: file.lastModified, text };
-            }
-          }
-          if (!type && text.includes("\0")) type = file.type || 'application/octet-stream';
+          const { file, type, text } = await this.readNode(node);
           if (version !== this.openVersion || this.nodes.get(path) !== node || this.operationBusy) return;
           clearTimeout(this.saveTimer);
           if (this.fileHandle && this.view && this.currentPath !== path && typeof this.fileHandle.createWritable === "function" && !(await this.save())) return;
