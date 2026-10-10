@@ -1165,6 +1165,7 @@
         this.previewUrl = null;
         this.openVersion = 0;
         this.saveTimer = null;
+        this.editorSession = null;
         this.toastTimer = null;
         this.nodes = new Map();
         this.expanded = new Set();
@@ -1669,6 +1670,7 @@
       }
 
       showObjectPreview(file, type) {
+        this.editorSession = null;
         this.view?.destroy();
         this.view = null;
         this.resetPreview();
@@ -1700,6 +1702,7 @@
       async openNode(path) {
         const node = this.nodes.get(path);
         if (!node || node.kind !== "file" || this.operationBusy) return;
+        if (this.currentPath === path) { this.openVersion++; this.closeSidebar(); return; }
         const version = ++this.openVersion;
         try {
           const file = await node.handle.getFile();
@@ -1731,6 +1734,7 @@
       }
 
       showEditor(doc) {
+        this.editorSession = { handle: this.fileHandle, savedText: doc, promise: null };
         this.resetPreview();
         this.toolbarTarget.classList.remove('preview-mode');
         this.placeholderTarget.hidden = true;
@@ -1765,6 +1769,7 @@
       }
 
       closeEditor() {
+        this.editorSession = null;
         this.openVersion++;
         this.resetPreview();
         clearTimeout(this.saveTimer);
@@ -1792,23 +1797,43 @@
           this.setStatus("Нужно скачать", "saving");
           return;
         }
+        if (!this.editorSession?.promise && this.view.state.doc.toString() === this.editorSession?.savedText) {
+          this.setStatus("Открыт", "saved");
+          return;
+        }
         this.setStatus("Изменения…", "saving");
         this.saveTimer = setTimeout(() => this.save(), 600);
       }
 
       async save() {
-        if (!this.fileHandle || !this.view || typeof this.fileHandle.createWritable !== "function") return true;
-        const handle = this.fileHandle;
-        const text = this.view.state.doc.toString();
-        const write = async () => {
-          const writable = await handle.createWritable();
-          await writable.write(text);
-          await writable.close();
-        };
-        this.setStatus("Сохранение…", "saving");
-        this.savePromise = (this.savePromise || Promise.resolve()).catch(() => {}).then(write);
-        try { await this.savePromise; this.setStatus("Сохранено", "saved"); return true; }
-        catch (e) { this.showToast(this.errMsg(e)); this.setStatus("Ошибка сохранения", "error"); return false; }
+        const session = this.editorSession;
+        if (!session || !this.view || typeof session.handle?.createWritable !== "function") return true;
+        if (session.promise) return session.promise;
+        if (this.view.state.doc.toString() === session.savedText) return true;
+        session.promise = (async () => {
+          try {
+            // Keep edits made during a write, without queuing duplicate snapshots.
+            while (this.editorSession === session && this.view) {
+              const text = this.view.state.doc.toString();
+              if (text === session.savedText) break;
+              this.setStatus("Сохранение…", "saving");
+              const writable = await session.handle.createWritable();
+              try { await writable.write(text); await writable.close(); }
+              catch (error) { try { await writable.abort(); } catch {} throw error; }
+              session.savedText = text;
+            }
+            if (this.editorSession === session) this.setStatus("Сохранено", "saved");
+            return true;
+          } catch (error) {
+            if (this.editorSession === session) {
+              this.showToast(this.errMsg(error));
+              this.setStatus("Ошибка сохранения", "error");
+            }
+            return false;
+          }
+        })();
+        try { return await session.promise; }
+        finally { session.promise = null; }
       }
 
       rootDragOver(event) {
@@ -1985,6 +2010,7 @@
           if (originalEditor === path || originalEditor?.startsWith(path + '/')) {
             this.currentPath = remap(originalEditor);
             this.fileHandle = this.nodes.get(this.currentPath).handle;
+            if (this.editorSession) this.editorSession.handle = this.fileHandle;
             this.pathLabelTarget.textContent = this.currentPath;
             this.mobileTitleTarget.textContent = this.nodes.get(this.currentPath).name;
             if (this.previewFile) {
