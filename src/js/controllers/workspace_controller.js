@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 
+import { IgnoreFileCache } from "../files/ignore-cache.js";
 import { Project } from "../files/project.js";
 import { ProjectReader } from "../files/reader.js";
 import { OpeningFeedback } from "../ui/opening.js";
@@ -101,6 +102,7 @@ export default class WorkspaceController extends Controller {
    */
   initialize() {
     this.project = new Project();
+    this.ignoreFiles = new IgnoreFileCache();
     this.reader = new ProjectReader(this.project);
   }
 
@@ -525,7 +527,7 @@ export default class WorkspaceController extends Controller {
       return;
     }
 
-    const value = { handle, path: this.project.currentPath };
+    const value = { handle, path: this.project.currentPath, ignores: this.ignoreFiles.snapshot() };
     this.recentWorkspace = value;
     void this.persistWorkspace(value);
   }
@@ -563,7 +565,7 @@ export default class WorkspaceController extends Controller {
         return;
       }
 
-      await this.loadNativeWorkspace(handle);
+      await this.loadNativeWorkspace(handle, this.recentWorkspace.ignores);
       await this.restoreSelectedFile(handle, path);
       this.setStatus("Проект открыт", "saved");
       this.closeSidebar();
@@ -575,12 +577,13 @@ export default class WorkspaceController extends Controller {
    * Load an authorized native file or directory into the shared project.
    *
    * @param {object} handle - Native file system handle.
+   * @param {Array|undefined} ignores - Rule snapshots belonging to this remembered workspace.
    */
-  async loadNativeWorkspace(handle) {
+  async loadNativeWorkspace(handle, ignores) {
     const version = this.opening.begin(`Открываем ${handle.name}…`);
 
     try {
-      await this.readNativeWorkspace(handle);
+      await this.readNativeWorkspace(handle, ignores);
     } finally {
       this.opening.finish(version);
     }
@@ -589,8 +592,10 @@ export default class WorkspaceController extends Controller {
    * Enumerate an authorized workspace before rendering its tree.
    *
    * @param {object} handle - Native file system handle.
+   * @param {Array|undefined} ignores - Rule snapshots belonging to this remembered workspace.
    */
-  async readNativeWorkspace(handle) {
+  async readNativeWorkspace(handle, ignores) {
+    this.ignoreFiles = new IgnoreFileCache(ignores);
     this.editor.closeEditor();
     this.project.nodes.clear();
     this.tree.reset();
@@ -598,7 +603,9 @@ export default class WorkspaceController extends Controller {
     this.project.workspaceIsDirectory = Boolean(this.project.dirHandle);
     this.setProjectName(handle.name);
     if (this.project.dirHandle) {
-      await this.project.scanDirectory(handle, "");
+      await this.project.scanDirectory(handle, "", {
+        readIgnore: (path, fileHandle) => this.ignoreFiles.read(path, fileHandle),
+      });
     }
 
     if (!this.project.dirHandle) {
