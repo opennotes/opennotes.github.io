@@ -1100,6 +1100,8 @@
       chevron: `<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`,
     };
 
+    const fileNameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
     function hasFSAccess() {
       return typeof window.showDirectoryPicker === "function" &&
              typeof window.showOpenFilePicker === "function";
@@ -1277,6 +1279,7 @@
       }
 
       prepareTree() {
+        this.children = null;
         this.projectVersion++;
         this.searchVersion++;
         this.expanded.clear();
@@ -1437,18 +1440,19 @@
       }
 
       async scanDirectory(dirHandle, parentPath) {
-        const entries = [];
-        for await (const entry of dirHandle.values()) entries.push(entry);
-        entries.sort((a, b) => {
-          if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
-          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-        });
-        for (const entry of entries) {
-          const path = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-          this.nodes.set(path, { handle: entry, kind: entry.kind, name: entry.name, parentPath });
-          if (entry.kind === "directory") {
-            try { await this.scanDirectory(entry, path); } catch { /* skip */ }
-          }
+        const pending = [{ handle: dirHandle, path: parentPath }];
+        // Read independent folders concurrently without creating an unbounded task per file.
+        while (pending.length) {
+          const batch = pending.splice(0, 6);
+          await Promise.all(batch.map(async ({ handle, path: parent }) => {
+            try {
+              for await (const entry of handle.values()) {
+                const path = parent ? `${parent}/${entry.name}` : entry.name;
+                this.nodes.set(path, { handle: entry, kind: entry.kind, name: entry.name, parentPath: parent });
+                if (entry.kind === "directory") pending.push({ handle: entry, path });
+              }
+            } catch (error) { if (handle === dirHandle) throw error; }
+          }));
         }
       }
 
@@ -1456,26 +1460,33 @@
         const projectName = this.rootNameTarget.textContent;
         this.rootNameTarget.title = projectName;
         document.title = projectName === 'Open Notes' ? 'Open Notes' : projectName + ' — Open Notes';
-        this.treeTarget.replaceChildren();
+        this.treeRows = new Map();
         this.treeTarget.setAttribute("role", "tree");
         this.treeTarget.setAttribute("aria-label", "Файлы проекта");
         if (!this.nodes.size) {
           this.emptyElement.textContent = "В папке нет файлов";
           this.emptyElement.hidden = false;
-          this.treeTarget.appendChild(this.emptyElement);
+          this.treeTarget.replaceChildren(this.emptyElement);
           return;
         }
-        this.children = new Map();
-        for (const [path, node] of this.nodes) {
-          if (!this.children.has(node.parentPath)) this.children.set(node.parentPath, []);
-          this.children.get(node.parentPath).push({ ...node, path });
+        if (!this.children || this.treeNodeCount !== this.nodes.size) {
+          this.children = new Map();
+          this.treeNodeCount = this.nodes.size;
+          for (const [path, node] of this.nodes) {
+            if (!this.children.has(node.parentPath)) this.children.set(node.parentPath, []);
+            this.children.get(node.parentPath).push({ ...node, path });
+          }
+          for (const children of this.children.values()) children.sort((a, b) =>
+            a.kind === b.kind ? fileNameCollator.compare(a.name, b.name) : a.kind === "directory" ? -1 : 1);
         }
-        for (const children of this.children.values()) children.sort((a, b) =>
-          a.kind === b.kind ? a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) : a.kind === "directory" ? -1 : 1);
-        for (const node of this.children.get("") || []) this.treeTarget.appendChild(this.buildNode(node, 1));
-        if (!this.treeTarget.querySelector('.tree-item[tabindex="0"]')) {
-          const first = this.treeTarget.querySelector('.tree-item');
-          if (first) { first.tabIndex = 0; this.focusedPath = first.dataset.path; }
+        const fragment = document.createDocumentFragment();
+        for (const node of this.children.get("") || []) fragment.appendChild(this.buildNode(node, 1));
+        this.treeTarget.replaceChildren(fragment);
+        this.selectedTreeRow = this.treeRows.get(this.currentPath);
+        this.focusedTreeRow = this.treeRows.get(this.focusedPath) || this.treeRows.values().next().value;
+        if (this.focusedTreeRow) {
+          this.focusedTreeRow.tabIndex = 0;
+          this.focusedPath = this.focusedTreeRow.dataset.path;
         }
         if (restoreFocus) this.focusTreeItem(this.focusedPath);
       }
@@ -1489,6 +1500,7 @@
         const item = document.createElement("div");
         item.className = `tree-item${isDir ? " dir" : ""}${this.currentPath === path ? " active" : ""}`;
         item.dataset.path = path;
+        this.treeRows.set(path, item);
         item.setAttribute("role", "treeitem");
         item.setAttribute("aria-level", level);
         item.setAttribute("aria-label", node.name);
@@ -1504,7 +1516,9 @@
         item.appendChild(label);
         item.addEventListener("focus", () => {
           this.focusedPath = path;
-          for (const row of this.treeTarget.querySelectorAll(".tree-item")) row.tabIndex = row === item ? 0 : -1;
+          if (this.focusedTreeRow && this.focusedTreeRow !== item) this.focusedTreeRow.tabIndex = -1;
+          this.focusedTreeRow = item;
+          item.tabIndex = 0;
         });
         item.addEventListener("click", () => {
           this.focusedPath = path;
@@ -1564,9 +1578,22 @@
         return wrap;
       }
 
+      updateTreeSelection(path) {
+        const row = this.treeRows?.get(path);
+        if (!row) { this.renderTree(); return; }
+        if (this.selectedTreeRow && this.selectedTreeRow !== row) {
+          this.selectedTreeRow.classList.remove('active');
+          this.selectedTreeRow.setAttribute('aria-selected', 'false');
+        }
+        if (this.focusedTreeRow && this.focusedTreeRow !== row) this.focusedTreeRow.tabIndex = -1;
+        row.classList.add('active');
+        row.setAttribute('aria-selected', 'true');
+        row.tabIndex = 0;
+        this.selectedTreeRow = this.focusedTreeRow = row;
+      }
+
       focusTreeItem(path) {
-        const rows = [...this.treeTarget.querySelectorAll(".tree-item")];
-        const row = rows.find(item => item.dataset.path === path) || rows[0];
+        const row = this.treeRows?.get(path) || this.treeRows?.values().next().value;
         if (!row) this.openButtonTarget.focus();
         row?.focus({ preventScroll: true });
         row?.scrollIntoView({ block: "nearest" });
@@ -1687,7 +1714,15 @@
         try {
           const file = await node.handle.getFile();
           let type = this.previewType(file);
-          const text = type ? null : node.text ?? await file.text();
+          let text = null;
+          if (!type) {
+            if (node.text !== undefined) text = node.text;
+            else if (node.searchCache?.size === file.size && node.searchCache?.modified === file.lastModified) text = node.searchCache.text;
+            else {
+              text = await file.text();
+              node.searchCache = { size: file.size, modified: file.lastModified, text };
+            }
+          }
           if (!type && text.includes("\0")) type = file.type || 'application/octet-stream';
           if (version !== this.openVersion || this.nodes.get(path) !== node || this.operationBusy) return;
           clearTimeout(this.saveTimer);
@@ -1696,13 +1731,18 @@
           this.fileHandle = node.handle;
           this.currentPath = path;
           let ancestor = node.parentPath;
-          while (ancestor) { this.expanded.add(ancestor); ancestor = this.nodes.get(ancestor)?.parentPath; }
+          let treeChanged = false;
+          while (ancestor) {
+            if (!this.expanded.has(ancestor)) { this.expanded.add(ancestor); treeChanged = true; }
+            ancestor = this.nodes.get(ancestor)?.parentPath;
+          }
           this.focusedPath = path;
           this.pathLabelTarget.textContent = path;
           this.mobileTitleTarget.textContent = node.name;
           if (type) this.showObjectPreview(file, type);
           else this.showEditor(text);
-          this.renderTree();
+          if (treeChanged) this.renderTree();
+          else this.updateTreeSelection(path);
           this.setStatus(type ? "Просмотр" : "Открыт", "saved");
           this.rememberWorkspace();
           this.closeSidebar();
@@ -1721,11 +1761,7 @@
         this.editorTarget.hidden = false;
         this.toolbarTarget.hidden = false;
         this.downloadTarget.hidden = typeof this.fileHandle?.createWritable === "function";
-        this.view?.destroy();
-        this.editorTarget.innerHTML = "";
-        this.view = new EditorView({
-          parent: this.editorTarget,
-          state: EditorState.create({
+        const state = EditorState.create({
             doc,
             extensions: [
               history(),
@@ -1743,8 +1779,12 @@
                 if (u.docChanged) this.scheduleSave();
               }),
             ],
-          }),
-        });
+          });
+        if (this.view) this.view.setState(state);
+        else {
+          this.editorTarget.replaceChildren();
+          this.view = new EditorView({ parent: this.editorTarget, state });
+        }
         this.view.focus();
       }
 
@@ -1801,6 +1841,8 @@
               try { await writable.write(text); await writable.close(); }
               catch (error) { try { await writable.abort(); } catch {} throw error; }
               session.savedText = text;
+              const node = this.nodes.get(this.currentPath);
+              if (node?.handle === session.handle) node.searchCache = null;
             }
             if (this.editorSession === session) this.setStatus("Сохранено", "saved");
             return true;
@@ -2004,6 +2046,7 @@
           }
           if (!this.workspaceIsDirectory) this.rootNameTarget.textContent = newName;
           this.projectVersion++; this.searchVersion++;
+          this.children = null;
           this.renderTree(true);
           this.setStatus(this.dirHandle ? 'Изменено на диске' : 'Изменено в проекте', 'saved');
           if (newName !== (requestedName || node.name)) this.showToast('Имя уже занято. Новое имя: ' + newName);
@@ -2035,6 +2078,7 @@
           for (const key of [...this.nodes.keys()]) if (key === path || key.startsWith(path + '/')) { this.nodes.delete(key); this.expanded.delete(key); }
           this.focusedPath = node.parentPath;
           this.projectVersion++; this.searchVersion++;
+          this.children = null;
           this.renderTree(true);
           this.setStatus(this.dirHandle ? 'Удалено с диска' : 'Удалено из проекта', 'saved');
         } finally { this.operationBusy = false; this.editorTarget.inert = false; this.toolbarTarget.inert = false; }
