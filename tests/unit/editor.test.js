@@ -184,7 +184,7 @@ describe("File syntax and formatting controls", () => {
     await c.openNode(name);
     expect(syntaxTree(c.editor.view.state)).toHaveLength(text.length);
     expect(syntaxTree(c.editor.view.state).topNode.firstChild).not.toBeNull();
-    expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).not.toBeNull();
+    expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).toBeNull();
     expect(c.editor.toolbarTarget.querySelectorAll(".tool-btn:disabled")).toHaveLength(10);
     c.editor.bold();
     c.editor.headingOne();
@@ -199,7 +199,7 @@ describe("File syntax and formatting controls", () => {
   it("switches back to Markdown and updates syntax after renaming without losing history", async () => {
     await project(c, directory("Notes", [fileHandle("A.md", "# Heading"), fileHandle("B.js", "let x = 1;")]));
     await c.openNode("B.js");
-    expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).not.toBeNull();
+    expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).toBeNull();
     await c.openNode("A.md");
     expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).toBeNull();
     expect(c.editor.toolbarTarget.querySelectorAll(".tool-btn:disabled")).toHaveLength(0);
@@ -210,7 +210,7 @@ describe("File syntax and formatting controls", () => {
     c.project.nodes.set("A.js", node);
     c.project.currentPath = "A.js";
     c.editor.refreshFileName();
-    expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).not.toBeNull();
+    expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).toBeNull();
     expect(c.editor.view.state.doc.toString()).toBe(text);
     expect(c.editor.toolbarTarget.querySelectorAll(".tool-btn:disabled")).toHaveLength(10);
     expect(c.editor.editorTarget.querySelector(".cm-md-heading-1")).toBeNull();

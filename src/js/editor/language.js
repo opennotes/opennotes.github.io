@@ -7,7 +7,7 @@ import { php } from "@codemirror/lang-php";
 import { sql } from "@codemirror/lang-sql";
 import { xml } from "@codemirror/lang-xml";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorView, lineNumbers } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 
 import { headingLineDecorations, markdownHighlightStyle, markdownMarkerDecorations } from "./markdown.js";
@@ -144,7 +144,6 @@ export function fileLanguage(path) {
   const language = languages.get(extension);
 
   return [
-    lineNumbers(),
     language
       ? [
           language(),

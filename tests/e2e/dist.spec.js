@@ -182,6 +182,7 @@ test("Context menu copies file and folder paths without changing the draft", asy
 });
 
 test("JSON, TypeScript and XML have colored syntax and updating line numbers", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("opennotes.lineNumbers", "true"));
   await page.goto("/edit.html");
   await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
   for (const colorScheme of ["light", "dark"]) {
@@ -222,6 +223,47 @@ test("JSON, TypeScript and XML have colored syntax and updating line numbers", a
     }
   }
   await page.locator('[data-workspace-target="fileInput"]').setInputFiles("tests/fixtures/banner-notes.md");
-  await expect(page.locator(".cm-lineNumbers")).toHaveCount(0);
+  await expect(page.locator(".cm-lineNumbers")).toBeVisible();
   await expect(page.getByRole("button", { name: "Жирный", exact: true })).toBeEnabled();
+});
+
+test("Line-number toolbar toggle persists across reloads and remains available for code", async ({
+  page,
+}) => {
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator(".tree-empty")).toHaveCSS("text-wrap", "balance");
+  const input = page.locator('[data-workspace-target="fileInput"]');
+  await input.setInputFiles({
+    name: "app.ts",
+    mimeType: "text/plain",
+    buffer: Buffer.from("const x = 1;\nconst y = 2;"),
+  });
+  const toggle = page.getByRole("button", { name: "Номера строк", exact: true });
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".cm-lineNumbers")).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".cm-lineNumbers")).toBeVisible();
+  await page.locator(".cm-content").fill("keep this draft");
+  await toggle.click();
+  await expect(page.locator(".cm-content")).toHaveText("keep this draft");
+  await expect(page.locator(".cm-lineNumbers")).toHaveCount(0);
+  await toggle.click();
+  await input.setInputFiles("tests/fixtures/banner-notes.md");
+  await expect(page.locator(".cm-lineNumbers")).toBeVisible();
+  await page.reload();
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  await input.setInputFiles("tests/fixtures/banner-notes.md");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".cm-lineNumbers")).toBeVisible();
+  await toggle.click();
+  await page.reload();
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  await input.setInputFiles("tests/fixtures/banner-notes.md");
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".cm-lineNumbers")).toHaveCount(0);
+  await input.setInputFiles("src/public/assets/app-icon.svg");
+  await expect(toggle).toBeHidden();
 });

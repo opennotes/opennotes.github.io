@@ -3,6 +3,7 @@ import { bracketMatching } from "@codemirror/language";
 import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
+  lineNumbers,
   keymap,
   highlightActiveLine,
   drawSelection,
@@ -10,6 +11,7 @@ import {
 } from "@codemirror/view";
 
 import { fileLanguage, isMarkdown } from "../editor/language.js";
+import { loadLineNumbers, storeLineNumbers } from "../editor/preferences.js";
 import { saveSession } from "../editor/session.js";
 import { ICO } from "../ui/icons.js";
 
@@ -29,6 +31,7 @@ export default class EditorController extends WorkspaceComponent {
     "toolbar",
     "pathLabel",
     "download",
+    "lineNumbers",
   ];
   /**
    * Create the state owned by this component.
@@ -36,6 +39,8 @@ export default class EditorController extends WorkspaceComponent {
   initialize() {
     this.view = null;
     this.language = new Compartment();
+    this.gutter = new Compartment();
+    this.hasLineNumbers = loadLineNumbers();
     this.previewFile = null;
     this.previewUrl = null;
     this.saveTimer = null;
@@ -301,7 +306,21 @@ export default class EditorController extends WorkspaceComponent {
     const state = this.createEditorState(text);
     this.mountEditor(state);
     this.updateFormatting();
+    this.lineNumbersTarget.setAttribute("aria-pressed", String(this.hasLineNumbers));
     this.view.focus();
+  }
+  /**
+   * Toggle line numbers without changing the draft, selection or history.
+   */
+  toggleLineNumbers() {
+    if (!this.view) {
+      return;
+    }
+
+    this.hasLineNumbers = !this.hasLineNumbers;
+    this.view.dispatch({ effects: this.gutter.reconfigure(this.hasLineNumbers ? lineNumbers() : []) });
+    this.lineNumbersTarget.setAttribute("aria-pressed", String(this.hasLineNumbers));
+    storeLineNumbers(this.hasLineNumbers);
   }
   /**
    * Enable formatting controls only for Markdown documents.
@@ -338,6 +357,7 @@ export default class EditorController extends WorkspaceComponent {
     return EditorState.create({
       doc: text,
       extensions: [
+        this.gutter.of(this.hasLineNumbers ? lineNumbers() : []),
         history(),
         drawSelection(),
         highlightActiveLine(),

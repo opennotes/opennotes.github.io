@@ -551,6 +551,7 @@ button {
   line-height: 1.5;
   color: var(--label-tertiary);
   text-align: center;
+  text-wrap: balance;
 }
 
 .tree-item {
@@ -1023,7 +1024,8 @@ install.native-install {
   outline-offset: 3px;
 }
 
-.toolbar.preview-mode .toolbar-group {
+.toolbar.preview-mode .toolbar-group,
+.toolbar.preview-mode .line-numbers-toggle {
   display: none;
 }
 
@@ -1541,4 +1543,13 @@ dialog::backdrop {
   .sidebar-separator {
     display: none;
   }
+}
+
+.line-numbers-toggle {
+  flex-shrink: 0;
+}
+
+.line-numbers-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-fill);
 }
