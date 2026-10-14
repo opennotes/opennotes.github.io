@@ -748,7 +748,7 @@ button {
     color 0.12s var(--ease);
 }
 
-.tool-btn:hover {
+.tool-btn:hover:enabled {
   color: var(--label);
   background: var(--bg-fill);
 }
@@ -758,7 +758,7 @@ button {
   outline-offset: 2px;
 }
 
-.tool-btn:active {
+.tool-btn:active:enabled {
   background: var(--bg-fill-active);
 }
 
@@ -1500,4 +1500,10 @@ dialog::backdrop {
   .tree-actions {
     opacity: 1;
   }
+}
+
+.tool-btn:disabled {
+  color: var(--label-tertiary);
+  cursor: default;
+  opacity: 0.45;
 }

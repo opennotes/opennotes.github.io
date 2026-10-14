@@ -1,7 +1,6 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { markdown } from "@codemirror/lang-markdown";
-import { syntaxHighlighting, bracketMatching } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
+import { bracketMatching } from "@codemirror/language";
+import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -10,11 +9,7 @@ import {
   placeholder as editorPlaceholder,
 } from "@codemirror/view";
 
-import {
-  markdownHighlightStyle,
-  headingLineDecorations,
-  markdownMarkerDecorations,
-} from "../editor/markdown.js";
+import { fileLanguage, isMarkdown } from "../editor/language.js";
 import { saveSession } from "../editor/session.js";
 import { ICO } from "../ui/icons.js";
 
@@ -40,6 +35,7 @@ export default class EditorController extends WorkspaceComponent {
    */
   initialize() {
     this.view = null;
+    this.language = new Compartment();
     this.previewFile = null;
     this.previewUrl = null;
     this.saveTimer = null;
@@ -124,6 +120,11 @@ export default class EditorController extends WorkspaceComponent {
     }
 
     this.workspace.mobileTitleTarget.textContent = node.name;
+    if (this.view) {
+      this.view.dispatch({ effects: this.language.reconfigure(fileLanguage(path)) });
+      this.updateFormatting();
+    }
+
     if (!this.previewFile) {
       return;
     }
@@ -159,7 +160,11 @@ export default class EditorController extends WorkspaceComponent {
         [
           this.view.state.doc.toString(),
         ],
-        { type: "text/markdown;charset=utf-8" },
+        {
+          type: isMarkdown(this.project.currentPath)
+            ? "text/markdown;charset=utf-8"
+            : "text/plain;charset=utf-8",
+        },
       );
 
     const url = URL.createObjectURL(blob);
@@ -295,7 +300,18 @@ export default class EditorController extends WorkspaceComponent {
     this.downloadTarget.hidden = typeof this.project.fileHandle?.createWritable === "function";
     const state = this.createEditorState(text);
     this.mountEditor(state);
+    this.updateFormatting();
     this.view.focus();
+  }
+  /**
+   * Enable formatting controls only for Markdown documents.
+   */
+  updateFormatting() {
+    const isDisabled = !isMarkdown(this.project.currentPath || this.project.fileHandle?.name || "");
+
+    for (const button of this.toolbarTarget.querySelectorAll(".toolbar-group .tool-btn")) {
+      button.disabled = isDisabled;
+    }
   }
   /**
    * Reuse an existing CodeMirror view or mount a new one.
@@ -313,10 +329,10 @@ export default class EditorController extends WorkspaceComponent {
     this.view = new EditorView({ parent: this.editorTarget, state });
   }
   /**
-   * Configure Markdown editing, decorations and change notifications.
+   * Configure file syntax, editing history and change notifications.
    *
    * @param {string} text - Current file contents.
-   * @returns {EditorState} Configured Markdown editing state.
+   * @returns {EditorState} Configured editing state.
    */
   createEditorState(text) {
     return EditorState.create({
@@ -326,17 +342,13 @@ export default class EditorController extends WorkspaceComponent {
         drawSelection(),
         highlightActiveLine(),
         bracketMatching(),
-        syntaxHighlighting(markdownHighlightStyle),
-        markdown(),
-        headingLineDecorations,
-        markdownMarkerDecorations,
+        this.language.of(fileLanguage(this.project.currentPath || this.project.fileHandle?.name || "")),
         editorPlaceholder("Начните писать…"),
         keymap.of([
           indentWithTab,
           ...historyKeymap,
           ...defaultKeymap,
         ]),
-        EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             this.scheduleSave();
@@ -535,7 +547,11 @@ export default class EditorController extends WorkspaceComponent {
    * @param {string} prefix - Markdown marker or relative path prefix.
    */
   #togglePrefix(prefix) {
-    if (!this.view || this.project.operationBusy) {
+    if (
+      !this.view ||
+      this.project.operationBusy ||
+      !isMarkdown(this.project.currentPath || this.project.fileHandle?.name || "")
+    ) {
       return;
     }
 
@@ -572,7 +588,11 @@ export default class EditorController extends WorkspaceComponent {
    * @param {string} placeholder - Replacement text when the selection is empty.
    */
   #wrap(before, after, placeholder) {
-    if (!this.view || this.project.operationBusy) {
+    if (
+      !this.view ||
+      this.project.operationBusy ||
+      !isMarkdown(this.project.currentPath || this.project.fileHandle?.name || "")
+    ) {
       return;
     }
 

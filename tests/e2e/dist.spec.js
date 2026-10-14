@@ -50,3 +50,39 @@ test("Installed homepage shortcuts enter the editor directly", async ({ page }) 
   await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
   await expect(page.locator("[data-native-install]")).toBeHidden();
 });
+
+test("Code files disable formatting and use syntax highlighting in both themes", async ({ page }) => {
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  for (const colorScheme of ["light", "dark"]) {
+    // eslint-disable-next-line no-await-in-loop -- Verify each theme and file in order.
+    await page.emulateMedia({ colorScheme });
+    for (const [name, text, token] of [
+      ["app.PHP", '<?php echo "hello";', "echo"],
+      ["style.css", "body { color: red; }", "color"],
+      ["app.js", "const answer = 42;", "const"],
+      ["index.html", '<h1 class="title">Hello</h1>', "h1"],
+      ["query.sql", "SELECT name FROM users;", "SELECT"],
+    ]) {
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and file in order.
+      await page
+        .locator('[data-workspace-target="fileInput"]')
+        .setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(text) });
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and file in order.
+      await expect(page.locator(".cm-content")).toHaveText(text);
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and file in order.
+      await expect(page.locator(".toolbar-group .tool-btn:disabled")).toHaveCount(10);
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and file in order.
+      await expect(page.locator(".cm-content span[class]").filter({ hasText: token }).first()).toBeVisible();
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and file in order.
+      await expect(page.locator('[data-editor-target="download"]')).toBeEnabled();
+    }
+  }
+  await page
+    .locator('[data-workspace-target="fileInput"]')
+    .setInputFiles({ name: "plain.txt", mimeType: "text/plain", buffer: Buffer.from("# Plain text") });
+  await expect(page.locator(".cm-md-heading-1")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Жирный", exact: true })).toBeDisabled();
+  await page.locator('[data-workspace-target="fileInput"]').setInputFiles("tests/fixtures/banner-notes.md");
+  await expect(page.getByRole("button", { name: "Жирный", exact: true })).toBeEnabled();
+});
