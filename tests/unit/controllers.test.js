@@ -11,7 +11,7 @@ afterEach(() => {
 it("shares one project and reader while controllers own their UI", async () => {
   expect(
     app.controllers.map((controller) => controller.identifier).toSorted((a, b) => a.localeCompare(b)),
-  ).toEqual(["editor", "search", "tree", "workspace"]);
+  ).toEqual(["editor", "search", "sidebar", "tree", "workspace"]);
   expect(c.editor.project).toBe(c.project);
   expect(c.tree.project).toBe(c.project);
   expect(c.search.project).toBe(c.project);

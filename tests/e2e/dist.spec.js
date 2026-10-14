@@ -86,3 +86,97 @@ test("Code files disable formatting and use syntax highlighting in both themes",
   await page.locator('[data-workspace-target="fileInput"]').setInputFiles("tests/fixtures/banner-notes.md");
   await expect(page.getByRole("button", { name: "Жирный", exact: true })).toBeEnabled();
 });
+
+test("Sidebar boundary supports dragging, limits, keyboard and reset", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  const separator = page.getByRole("separator", { name: "Ширина бокового меню" });
+  const sidebar = page.locator(".sidebar");
+  await expect(sidebar).toHaveCSS("width", "260px");
+  const boundary = await separator.boundingBox();
+  await page.mouse.move(boundary.x + boundary.width / 2, boundary.y + 100);
+  await expect(separator).toHaveCSS("cursor", "col-resize");
+  await page.mouse.down();
+  await page.mouse.move(boundary.x + boundary.width / 2 + 140, boundary.y + 100);
+  await expect(sidebar).toHaveCSS("width", "400px");
+  await expect(separator).toHaveAttribute("aria-valuenow", "400");
+  await page.mouse.move(1200, boundary.y + 100);
+  await expect(sidebar).toHaveCSS("width", "560px");
+  await page.mouse.move(0, boundary.y + 100);
+  await expect(sidebar).toHaveCSS("width", "220px");
+  await page.mouse.up();
+  await expect(page.locator(".app")).not.toHaveClass(/sidebar-resizing/);
+  await page.mouse.move(700, 200);
+  await expect(sidebar).toHaveCSS("width", "220px");
+  await separator.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(sidebar).toHaveCSS("width", "236px");
+  await page.keyboard.press("End");
+  await expect(sidebar).toHaveCSS("width", "560px");
+  await page.setViewportSize({ width: 800, height: 800 });
+  await expect(sidebar).toHaveCSS("width", "440px");
+  await expect(separator).toHaveAttribute("aria-valuenow", "440");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(sidebar).toHaveCSS("width", "560px");
+  await separator.dblclick();
+  await expect(sidebar).toHaveCSS("width", "260px");
+});
+
+test("Desktop sidebar resizing leaves the mobile drawer unchanged", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  const warning = page.getByRole("button", { name: "Закрыть предупреждение" });
+  if (await warning.isVisible()) {
+    await warning.click();
+  }
+
+  const separator = page.getByRole("separator", { name: "Ширина бокового меню" });
+  await separator.focus();
+  await page.keyboard.press("End");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(separator).toBeHidden();
+  await expect(page.locator(".sidebar")).toHaveCSS("width", "300px");
+  await expect(page.locator(".main")).toHaveCSS("width", "390px");
+  await page.locator('.mobile-bar [data-action="workspace#toggleSidebar"]').click();
+  await expect(page.locator(".sidebar")).toHaveClass(/open/);
+  await page.locator(".close-sidebar").click();
+  await expect(page.locator(".sidebar")).not.toHaveClass(/open/);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(separator).toBeVisible();
+  await expect(page.locator(".sidebar")).toHaveCSS("width", "560px");
+});
+
+test("Context menu copies file and folder paths without changing the draft", async ({ page }) => {
+  await page.addInitScript(() => {
+    globalThis.copiedPaths = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        async writeText(text) {
+          globalThis.copiedPaths.push(text);
+        },
+      },
+    });
+  });
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  await page.locator('[data-workspace-target="directoryInput"]').setInputFiles("tests/fixtures/copy-path");
+  await page.locator('.tree-item[data-path="Мои заметки"] .label').click();
+  await page.locator('.tree-item[data-path="Мои заметки/A B.md"] .label').click();
+  await expect(page.locator(".cm-content")).toContainText("Nested note");
+  await page.locator(".cm-content").fill("Keep this draft");
+  await page.getByRole("button", { name: "Действия: Мои заметки", exact: true }).click();
+  await page.getByRole("button", { name: "Копировать путь", exact: true }).click();
+  await expect(page.locator('[data-tree-target="contextMenu"]')).toBeHidden();
+  await expect(page.locator('[data-workspace-target="toast"]')).toHaveText("Путь скопирован");
+  expect(await page.evaluate(() => globalThis.copiedPaths)).toEqual(["Мои заметки"]);
+  const file = page.locator('.tree-item[data-path="Мои заметки/A B.md"]');
+  await file.click({ button: "right" });
+  await page.getByRole("button", { name: "Копировать путь", exact: true }).click();
+  expect(await page.evaluate(() => globalThis.copiedPaths)).toEqual(["Мои заметки", "Мои заметки/A B.md"]);
+  await expect(file).toBeFocused();
+  await expect(page.locator(".cm-content")).toHaveText("Keep this draft");
+  await expect(page.locator('[data-tree-target="actionDialog"]')).not.toBeVisible();
+});

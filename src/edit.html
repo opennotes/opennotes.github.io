@@ -136,7 +136,17 @@
 
       <div class="overlay" data-workspace-target="overlay" data-action="click->workspace#closeSidebar"></div>
 
-      <aside class="sidebar" data-workspace-target="sidebar">
+      <aside class="sidebar" id="file-sidebar" data-controller="sidebar" data-workspace-target="sidebar">
+        <div
+          class="sidebar-separator"
+          role="separator"
+          tabindex="0"
+          aria-label="Ширина бокового меню"
+          aria-orientation="vertical"
+          aria-controls="file-sidebar"
+          data-sidebar-target="separator"
+          data-action="pointerdown->sidebar#start pointermove->sidebar#move pointerup->sidebar#finish pointercancel->sidebar#finish lostpointercapture->sidebar#finish keydown->sidebar#keydown dblclick->sidebar#reset resize@window->sidebar#sync"
+        ></div>
         <div class="sidebar-header">
           <div class="sidebar-top">
             <span
@@ -497,6 +507,7 @@
 
       <div class="context-menu" data-tree-target="contextMenu" hidden>
         <button type="button" data-action="tree#renameSelected">Переименовать…</button>
+        <button type="button" data-action="tree#copyPath">Копировать путь</button>
         <button type="button" class="danger" data-action="tree#deleteSelected">Удалить…</button>
       </div>
       <dialog data-tree-target="actionDialog">

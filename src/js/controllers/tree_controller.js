@@ -802,6 +802,25 @@ export default class TreeController extends WorkspaceComponent {
   }
 
   /**
+   * Copy the context node's project-relative path to the clipboard.
+   */
+  async copyPath() {
+    const path = this.contextPath;
+    this.closeContextMenu();
+    if (!this.project.nodes.has(path) || this.project.operationBusy) {
+      return;
+    }
+
+    this.focusTreeItem(path);
+    try {
+      await navigator.clipboard.writeText(path);
+      this.workspace.showToast("Путь скопирован");
+    } catch {
+      this.workspace.showToast("Не удалось скопировать путь");
+    }
+  }
+
+  /**
    * Open the rename dialog for the selected node.
    */
   renameSelected() {
