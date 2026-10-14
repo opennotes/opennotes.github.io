@@ -1054,7 +1054,7 @@ install.native-install {
 }
 
 .cm-gutters {
-  color: var(--label-tertiary) !important;
+  color: var(--label-secondary) !important;
   background: var(--cm-gutter) !important;
   border-right: 0.5px solid var(--separator) !important;
 }

@@ -1,16 +1,26 @@
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
+import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { php } from "@codemirror/lang-php";
 import { sql } from "@codemirror/lang-sql";
+import { xml } from "@codemirror/lang-xml";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorView } from "@codemirror/view";
+import { EditorView, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 
 import { headingLineDecorations, markdownHighlightStyle, markdownMarkerDecorations } from "./markdown.js";
 
 const languages = new Map([
+  [
+    "json",
+    json,
+  ],
+  [
+    "xml",
+    xml,
+  ],
   [
     "php",
     php,
@@ -37,6 +47,14 @@ const languages = new Map([
   ],
   [
     "ts",
+    () => javascript({ typescript: true }),
+  ],
+  [
+    "mts",
+    () => javascript({ typescript: true }),
+  ],
+  [
+    "cts",
     () => javascript({ typescript: true }),
   ],
   [
@@ -125,10 +143,13 @@ export function fileLanguage(path) {
   const extension = path.split(".").pop().toLowerCase();
   const language = languages.get(extension);
 
-  return language
-    ? [
-        language(),
-        syntaxHighlighting(codeHighlightStyle),
-      ]
-    : [];
+  return [
+    lineNumbers(),
+    language
+      ? [
+          language(),
+          syntaxHighlighting(codeHighlightStyle),
+        ]
+      : [],
+  ];
 }

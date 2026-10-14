@@ -180,3 +180,48 @@ test("Context menu copies file and folder paths without changing the draft", asy
   await expect(page.locator(".cm-content")).toHaveText("Keep this draft");
   await expect(page.locator('[data-tree-target="actionDialog"]')).not.toBeVisible();
 });
+
+test("JSON, TypeScript and XML have colored syntax and updating line numbers", async ({ page }) => {
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  for (const colorScheme of ["light", "dark"]) {
+    // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+    await page.emulateMedia({ colorScheme });
+    for (const [name, text, token] of [
+      ["config.JSON", '{\n  "enabled": true\n}', '"enabled"'],
+      ["module.TS", "interface Note {\n  title: string;\n}", "interface"],
+      ["data.XML", '<note id="1">\n  <title>Hello</title>\n</note>', "note"],
+    ]) {
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      await page
+        .locator('[data-workspace-target="fileInput"]')
+        .setInputFiles({ name, mimeType: "text/plain", buffer: Buffer.from(text) });
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      await expect(page.locator(".cm-line")).toHaveText(text.split("\n"));
+      const syntaxToken = page.locator(".cm-content span[class]").filter({ hasText: token }).first();
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      await expect(syntaxToken).toBeVisible();
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      const colorsDiffer = await syntaxToken.evaluate(
+        (element) =>
+          getComputedStyle(element).color !== getComputedStyle(element.closest(".cm-content")).color,
+      );
+      expect(colorsDiffer).toBe(true);
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      await expect(
+        page.locator(".cm-lineNumbers .cm-gutterElement").filter({ hasText: /^3$/ }),
+      ).toBeVisible();
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      await page.locator(".cm-content").fill(`${text}\n`);
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      await expect(
+        page.locator(".cm-lineNumbers .cm-gutterElement").filter({ hasText: /^4$/ }),
+      ).toBeVisible();
+      // eslint-disable-next-line no-await-in-loop -- Verify each theme and document in order.
+      await expect(page.getByRole("button", { name: "Жирный", exact: true })).toBeDisabled();
+    }
+  }
+  await page.locator('[data-workspace-target="fileInput"]').setInputFiles("tests/fixtures/banner-notes.md");
+  await expect(page.locator(".cm-lineNumbers")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Жирный", exact: true })).toBeEnabled();
+});
