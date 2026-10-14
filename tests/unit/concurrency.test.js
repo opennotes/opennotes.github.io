@@ -121,6 +121,7 @@ it("suppresses a failed save belonging to an editor that has closed", async () =
     });
   c.editor.view.dispatch({ changes: { from: 1, insert: " changed" } });
   const saving = c.editor.save();
+  await vi.waitFor(() => expect(rejectSave).toBeTypeOf("function"));
   c.editor.closeEditor();
   rejectSave(new Error("late"));
   expect(await saving).toBe(false);

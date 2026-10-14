@@ -19,8 +19,9 @@ async function flushSession(session, callbacks) {
       callbacks.onSaving();
       // Writes must finish in order so an older draft cannot overwrite a newer one.
       // eslint-disable-next-line no-await-in-loop
-      await writeFile(session.handle, text);
+      await writeFile(session.handle, text, session.diskText);
       session.savedText = text;
+      session.diskText = text;
       callbacks.onWritten();
     }
 

@@ -102,3 +102,54 @@ test("opening a native file announces the read without loading its neighbours", 
   await expect(page.locator('[data-workspace-target="opening"]')).toBeHidden();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
 });
+
+test("Native project opening preserves line endings and blocks stale autosaves", async ({ page }) => {
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  const directoryName = `external-changes-${Date.now()}`;
+  try {
+    const result = await page.evaluate(async (name) => {
+      const { application } = await import("/js/entries/editor.js");
+      const c = application.getControllerForElementAndIdentifier(document.querySelector(".app"), "workspace");
+      const storage = await navigator.storage.getDirectory();
+      const root = await storage.getDirectoryHandle(name, { create: true });
+      const handle = await root.getFileHandle("A.md", { create: true });
+      const initial = "one\r\ntwo";
+      const writer = await handle.createWritable();
+      await writer.write(initial);
+      await writer.close();
+      await c.loadNativeWorkspace(root);
+      await c.openNode("A.md");
+      await c.editor.save();
+      const unchangedFile = await handle.getFile();
+      const afterOpening = await unchangedFile.text();
+      c.editor.view.dispatch({ changes: { from: 0, insert: "browser " } });
+      c.editor.cancelSave();
+      const external = await handle.createWritable();
+      await external.write("external version");
+      await external.close();
+      const saved = await c.editor.save();
+      const currentFile = await handle.getFile();
+      return {
+        afterOpening,
+        saved,
+        disk: await currentFile.text(),
+        draft: c.editor.view.state.sliceDoc(),
+      };
+    }, directoryName);
+    expect(result).toEqual({
+      afterOpening: "one\r\ntwo",
+      saved: false,
+      disk: "external version",
+      draft: "browser one\r\ntwo",
+    });
+    await expect(page.locator('[data-workspace-target="toast"]')).toContainText("Файл изменён вне редактора");
+    await expect(page.locator('[data-editor-target="download"]')).toBeVisible();
+    await expect(page.locator(".cm-line")).toHaveText(["browser one", "two"]);
+  } finally {
+    await page.evaluate(async (name) => {
+      const storage = await navigator.storage.getDirectory();
+      await storage.removeEntry(name, { recursive: true });
+    }, directoryName);
+  }
+});

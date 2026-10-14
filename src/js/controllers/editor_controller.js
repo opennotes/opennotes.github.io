@@ -1,6 +1,6 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { bracketMatching } from "@codemirror/language";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, Text } from "@codemirror/state";
 import {
   EditorView,
   lineNumbers,
@@ -163,7 +163,7 @@ export default class EditorController extends WorkspaceComponent {
       this.previewFile ||
       new Blob(
         [
-          this.view.state.doc.toString(),
+          this.view.state.sliceDoc(),
         ],
         {
           type: isMarkdown(this.project.currentPath)
@@ -296,14 +296,19 @@ export default class EditorController extends WorkspaceComponent {
    * @param {string} text - Current file contents.
    */
   showEditor(text) {
-    this.editorSession = { handle: this.project.fileHandle, savedText: text, promise: null };
+    const state = this.createEditorState(text);
+    this.editorSession = {
+      handle: this.project.fileHandle,
+      savedText: state.sliceDoc(),
+      diskText: text,
+      promise: null,
+    };
     this.resetPreview();
     this.toolbarTarget.classList.remove(...this.previewClasses);
     this.workspace.placeholderTarget.hidden = true;
     this.editorTarget.hidden = false;
     this.toolbarTarget.hidden = false;
     this.downloadTarget.hidden = typeof this.project.fileHandle?.createWritable === "function";
-    const state = this.createEditorState(text);
     this.mountEditor(state);
     this.updateFormatting();
     this.lineNumbersTarget.setAttribute("aria-pressed", String(this.hasLineNumbers));
@@ -355,8 +360,9 @@ export default class EditorController extends WorkspaceComponent {
    */
   createEditorState(text) {
     return EditorState.create({
-      doc: text,
+      doc: Text.of(text.split(/\r\n?|\n/)),
       extensions: [
+        EditorState.lineSeparator.of(text.match(/\r\n?|\n/)?.[0] || "\n"),
         this.gutter.of(this.hasLineNumbers ? lineNumbers() : []),
         history(),
         drawSelection(),
@@ -415,7 +421,7 @@ export default class EditorController extends WorkspaceComponent {
       const node = this.project.nodes.get(this.project.currentPath);
 
       if (node) {
-        node.text = this.view.state.doc.toString();
+        node.text = this.view.state.sliceDoc();
         if (node.name === ".gitignore") {
           this.project.invalidateExclusions();
           this.dispatch("rules-changed");
@@ -427,7 +433,7 @@ export default class EditorController extends WorkspaceComponent {
       return;
     }
 
-    if (!this.editorSession?.promise && this.view.state.doc.toString() === this.editorSession?.savedText) {
+    if (!this.editorSession?.promise && this.view.state.sliceDoc() === this.editorSession?.savedText) {
       this.workspace.setStatus("Открыт", "saved");
 
       return;
@@ -449,13 +455,13 @@ export default class EditorController extends WorkspaceComponent {
       return true;
     }
 
-    if (this.view.state.doc.toString() === session.savedText && !session.promise) {
+    if (this.view.state.sliceDoc() === session.savedText && !session.promise) {
       return true;
     }
 
     return await saveSession(session, {
       isCurrent: () => this.editorSession === session,
-      readText: () => (this.view ? this.view.state.doc.toString() : null),
+      readText: () => (this.view ? this.view.state.sliceDoc() : null),
       onSaving: () => this.workspace.setStatus("Сохранение…", "saving"),
       onWritten: () => {
         const node = this.project.nodes.get(this.project.currentPath);
@@ -474,6 +480,7 @@ export default class EditorController extends WorkspaceComponent {
       },
       onComplete: () => this.workspace.setStatus("Сохранено", "saved"),
       onError: (error) => {
+        this.downloadTarget.hidden = false;
         this.workspace.showToast(this.workspace.errMsg(error));
         this.workspace.setStatus("Ошибка сохранения", "error");
       },
