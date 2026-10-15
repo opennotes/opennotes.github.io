@@ -12,7 +12,9 @@ test("Both built pages load local assets and the editor works", async ({ page })
     }
   });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Простой редактор Markdown", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Ваши заметки. В ваших файлах.", exact: true }),
+  ).toBeVisible();
   await page.goto("/edit.html");
   await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
   await page.locator('[data-workspace-target="fileInput"]').setInputFiles("tests/fixtures/banner-notes.md");

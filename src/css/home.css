@@ -10,9 +10,10 @@
   --line: rgb(60 60 67 / 12%);
   --accent: #0068d9;
   --button-bg: #0068d9;
-  --wash: rgb(120 120 128 / 7%);
-  --glow: rgb(0 122 255 / 3.5%);
+  --wash: rgb(175 82 222 / 10%);
+  --glow: rgb(0 122 255 / 14%);
   --shadow: 0 0 0 0.5px rgb(0 0 0 / 4%), 0 2px 8px rgb(0 0 0 / 6%);
+  --shadow-lg: 0 0 0 0.5px rgb(0 0 0 / 6%), 0 8px 28px rgb(0 0 0 / 12%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,9 +25,10 @@
     --secondary: #aeaeb2;
     --line: rgb(84 84 88 / 36%);
     --accent: #409cff;
-    --wash: rgb(120 120 128 / 8%);
-    --glow: rgb(10 132 255 / 3.5%);
+    --wash: rgb(191 90 242 / 14%);
+    --glow: rgb(10 132 255 / 20%);
     --shadow: 0 0 0 0.5px rgb(255 255 255 / 4%), 0 2px 10px rgb(0 0 0 / 35%);
+    --shadow-lg: 0 0 0 0.5px rgb(255 255 255 / 6%), 0 12px 36px rgb(0 0 0 / 50%);
   }
 }
 
@@ -42,9 +44,7 @@ body {
   margin: 0;
   font: 16px/1.6 var(--font);
   color: var(--label);
-  background:
-    radial-gradient(ellipse 650px 420px at calc(50% - 260px) 280px, var(--wash), transparent),
-    radial-gradient(ellipse 620px 500px at calc(50% + 340px) 550px, var(--glow), transparent), var(--bg);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -138,9 +138,9 @@ main:focus {
 
 h1 {
   margin: 0;
-  font-size: clamp(28px, 4vw, 36px);
+  font-size: clamp(32px, 5vw, 56px);
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 1.1;
   letter-spacing: -0.03em;
   text-wrap: balance;
 }
@@ -194,7 +194,21 @@ h1 {
 }
 
 .preview {
+  position: relative;
   margin: 4px 0 44px;
+  isolation: isolate;
+}
+
+.preview::before {
+  position: absolute;
+  inset: -64px -16px -20px;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(ellipse at 25% 35%, var(--wash), transparent 65%),
+    radial-gradient(ellipse at 75% 40%, var(--glow), transparent 65%);
+  mask-image: radial-gradient(ellipse, #000 50%, transparent 75%);
 }
 
 .preview picture {
@@ -203,7 +217,13 @@ h1 {
   background: var(--fill);
   border: 1px solid var(--line);
   border-radius: 10px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .preview::before {
+    display: none;
+  }
 }
 
 .preview img {
@@ -269,6 +289,13 @@ h2 {
   font-size: 15px;
   color: var(--secondary);
   border-top: 1px solid var(--line);
+}
+
+.intro-benefits {
+  margin: 16px auto 0;
+  font-size: 13px;
+  color: var(--secondary);
+  text-wrap: balance;
 }
 
 .install-status {

@@ -16,10 +16,10 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg%20width%3D%2226%22%20height%3D%2226%22%20viewBox%3D%220%200%2026%2026%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cstyle%3E%3Aroot%20%7B%20color%3A%20%23000%3B%20%7D%20%40media%20%28prefers-color-scheme%3A%20dark%29%20%7B%20%3Aroot%20%7B%20color%3A%20%23fff%3B%20%7D%20%7D%3C%2Fstyle%3E%0A%3Cpath%20d%3D%22M22.28%2012.9564C23.5935%2011.6429%2024.3314%209.86144%2024.3314%208.00389C24.3314%206.14634%2023.5935%204.36488%2022.28%203.05139C20.9665%201.73791%2019.185%201%2017.3275%201C15.47%201%2013.6885%201.73791%2012.375%203.05139L4.5%2010.9264V20.8431H14.4167L22.28%2012.9564Z%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M17.3333%208.00977L1%2024.3431%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M19.0832%2016.1763H9.1665%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3C%2Fsvg%3E"
     />
-    <script type="module" crossorigin src="./assets/editor-BsMAglax.js"></script>
+    <script type="module" crossorigin src="./assets/editor-CGtksLtR.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/install-DHRs387L.js">
     <link rel="modulepreload" crossorigin href="./assets/preload-helper-UWy1vN1I.js">
-    <link rel="stylesheet" crossorigin href="./assets/editor-D_qK8NY4.css">
+    <link rel="stylesheet" crossorigin href="./assets/editor-CUZzAKTo.css">
   </head>
   <body>
     <div
@@ -45,7 +45,7 @@
       data-tree-drop-target-class="drop-target"
       data-tree-root-drop-target-class="root-drop-target"
       data-editor-preview-class="preview-mode"
-      data-action="tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions"
+      data-action="tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions visibilitychange@document->editor#refreshFromDisk focus@window->editor#refreshFromDisk"
       data-workspace-target="app"
     >
       <div class="banner" data-workspace-target="banner" role="alert">
@@ -138,7 +138,17 @@
 
       <div class="overlay" data-workspace-target="overlay" data-action="click->workspace#closeSidebar"></div>
 
-      <aside class="sidebar" data-workspace-target="sidebar">
+      <aside class="sidebar" id="file-sidebar" data-controller="sidebar" data-workspace-target="sidebar">
+        <div
+          class="sidebar-separator"
+          role="separator"
+          tabindex="0"
+          aria-label="Ширина бокового меню"
+          aria-orientation="vertical"
+          aria-controls="file-sidebar"
+          data-sidebar-target="separator"
+          data-action="pointerdown->sidebar#start pointermove->sidebar#move pointerup->sidebar#finish pointercancel->sidebar#finish lostpointercapture->sidebar#finish keydown->sidebar#keydown dblclick->sidebar#reset resize@window->sidebar#sync"
+        ></div>
         <div class="sidebar-header">
           <div class="sidebar-top">
             <span
@@ -349,6 +359,20 @@
               </svg>
             </button>
           </div>
+          <button
+            type="button"
+            class="tool-btn line-numbers-toggle"
+            data-editor-target="lineNumbers"
+            data-action="editor#toggleLineNumbers"
+            aria-label="Номера строк"
+            aria-pressed="false"
+            title="Номера строк"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M9 4v16M12 8h6M12 12h6M12 16h6M6 8h.01M6 12h.01M6 16h.01" />
+            </svg>
+          </button>
           <div class="file-info">
             <span class="file-path" data-editor-target="pathLabel"></span>
             <button
@@ -499,6 +523,7 @@
 
       <div class="context-menu" data-tree-target="contextMenu" hidden>
         <button type="button" data-action="tree#renameSelected">Переименовать…</button>
+        <button type="button" data-action="tree#copyPath">Копировать путь</button>
         <button type="button" class="danger" data-action="tree#deleteSelected">Удалить…</button>
       </div>
       <dialog data-tree-target="actionDialog">
