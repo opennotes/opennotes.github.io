@@ -43,7 +43,7 @@
       data-tree-drop-target-class="drop-target"
       data-tree-root-drop-target-class="root-drop-target"
       data-editor-preview-class="preview-mode"
-      data-action="tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions"
+      data-action="tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions visibilitychange@document->editor#refreshFromDisk focus@window->editor#refreshFromDisk"
       data-workspace-target="app"
     >
       <div class="banner" data-workspace-target="banner" role="alert">

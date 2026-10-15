@@ -45,6 +45,7 @@ export default class EditorController extends WorkspaceComponent {
     this.previewUrl = null;
     this.saveTimer = null;
     this.editorSession = null;
+    this.refreshPromise = null;
   }
   /**
    * Release the component resources and remove event handlers.
@@ -54,6 +55,7 @@ export default class EditorController extends WorkspaceComponent {
     this.view?.destroy();
     this.view = null;
     this.editorSession = null;
+    this.refreshPromise = null;
     this.editorTarget.hidden = true;
     this.toolbarTarget.hidden = true;
     this.pathLabelTarget.textContent = "";
@@ -78,6 +80,151 @@ export default class EditorController extends WorkspaceComponent {
       return this.view.state.doc.toString();
     }
   }
+  /**
+   * Check that an active native document has no unsaved edits or pending writes.
+   *
+   * @returns {boolean} Whether refreshing from disk is currently safe.
+   */
+  get canRefreshFromDisk() {
+    if (
+      document.visibilityState !== "visible" ||
+      this.project.operationBusy ||
+      !this.workspace.openingTarget.hidden
+    ) {
+      return false;
+    }
+
+    const session = this.editorSession;
+
+    if (!this.view || !session || session.promise) {
+      return false;
+    }
+
+    return (
+      typeof session.handle?.createWritable === "function" && this.view.state.sliceDoc() === session.savedText
+    );
+  }
+
+  /**
+   * Refresh a clean document on tab activation without replacing a newer draft.
+   */
+  async refreshFromDisk() {
+    if (!this.canRefreshFromDisk || this.refreshPromise) {
+      return;
+    }
+
+    const session = this.editorSession;
+
+    const snapshot = {
+      session,
+      handle: session.handle,
+      doc: this.view.state.doc,
+      version: this.workspace.openVersion,
+    };
+
+    const request = this.readDiskText(snapshot.handle);
+    this.refreshPromise = request;
+    try {
+      const text = await request;
+
+      if (!this.isCurrentDiskRead(snapshot) || text === session.diskText) {
+        return;
+      }
+
+      this.reloadDiskText(text);
+    } catch (error) {
+      if (this.editorSession === session && this.canRefreshFromDisk) {
+        this.workspace.showToast(`Не удалось обновить файл: ${this.workspace.errMsg(error)}`);
+      }
+    } finally {
+      if (this.refreshPromise === request) {
+        this.refreshPromise = null;
+      }
+    }
+  }
+
+  /**
+   * Check ownership again after an asynchronous disk read.
+   *
+   * @param {object} snapshot - Session, handle, document and open version captured before reading.
+   * @returns {boolean} Whether the original clean document still owns this read.
+   */
+  isCurrentDiskRead(snapshot) {
+    const ownsSession = this.editorSession === snapshot.session && this.canRefreshFromDisk;
+
+    if (!ownsSession) {
+      return false;
+    }
+
+    const isSameDocument =
+      this.view.state.doc === snapshot.doc && snapshot.session.handle === snapshot.handle;
+
+    return isSameDocument && this.workspace.openVersion === snapshot.version;
+  }
+
+  /**
+   * Read fresh contents without consulting search or preview caches.
+   *
+   * @param {object} handle - Native handle of the active document.
+   * @returns {Promise<string>} Current text stored on disk.
+   */
+  async readDiskText(handle) {
+    const file = await handle.getFile();
+
+    return file.text();
+  }
+
+  /**
+   * Replace the clean document while preserving selection, scroll and focus.
+   *
+   * @param {string} text - Fresh contents read from disk.
+   */
+  reloadDiskText(text) {
+    const state = this.createEditorState(text);
+    const { anchor, head } = this.view.state.selection.main;
+    const { scrollTop, scrollLeft } = this.view.scrollDOM;
+    this.cancelSave();
+    this.editorSession = { ...this.editorSession, savedText: state.sliceDoc(), diskText: text };
+    this.mountEditor(
+      state.update({
+        selection: {
+          anchor: Math.min(anchor, state.doc.length),
+          head: Math.min(head, state.doc.length),
+        },
+      }).state,
+    );
+    this.view.scrollDOM.scrollTop = scrollTop;
+    this.view.scrollDOM.scrollLeft = scrollLeft;
+    this.project.projectVersion++;
+    this.fileChanged(this.editorSession);
+    if (this.workspace.search.isOpen) {
+      this.workspace.search.queueSearch();
+    }
+
+    this.workspace.setStatus("Обновлено с диска", "saved");
+  }
+
+  /**
+   * Invalidate caches and project rules after file contents change.
+   *
+   * @param {object} session - Session whose file contents changed.
+   */
+  fileChanged(session) {
+    const node = this.project.nodes.get(this.project.currentPath);
+
+    if (node?.handle !== session.handle) {
+      return;
+    }
+
+    node.searchCache = null;
+    if (node.name !== ".gitignore") {
+      return;
+    }
+
+    this.project.invalidateExclusions();
+    this.dispatch("rules-changed");
+  }
+
   /**
    * Cancel the pending autosave timer.
    */
@@ -296,6 +443,7 @@ export default class EditorController extends WorkspaceComponent {
    * @param {string} text - Current file contents.
    */
   showEditor(text) {
+    this.refreshPromise = null;
     const state = this.createEditorState(text);
     this.editorSession = {
       handle: this.project.fileHandle,
@@ -389,6 +537,7 @@ export default class EditorController extends WorkspaceComponent {
    */
   closeEditor() {
     this.editorSession = null;
+    this.refreshPromise = null;
     this.workspace.openVersion++;
     this.resetPreview();
     clearTimeout(this.saveTimer);
@@ -463,21 +612,7 @@ export default class EditorController extends WorkspaceComponent {
       isCurrent: () => this.editorSession === session,
       readText: () => (this.view ? this.view.state.sliceDoc() : null),
       onSaving: () => this.workspace.setStatus("Сохранение…", "saving"),
-      onWritten: () => {
-        const node = this.project.nodes.get(this.project.currentPath);
-
-        if (node?.handle !== session.handle) {
-          return;
-        }
-
-        node.searchCache = null;
-        if (node.name !== ".gitignore") {
-          return;
-        }
-
-        this.project.invalidateExclusions();
-        this.dispatch("rules-changed");
-      },
+      onWritten: () => this.fileChanged(session),
       onComplete: () => this.workspace.setStatus("Сохранено", "saved"),
       onError: (error) => {
         this.downloadTarget.hidden = false;

@@ -153,3 +153,78 @@ test("Native project opening preserves line endings and blocks stale autosaves",
     }, directoryName);
   }
 });
+
+test("Returning to the tab reloads clean disk changes and preserves unsaved drafts", async ({
+  page,
+  context,
+}) => {
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  const directoryName = `tab-refresh-${Date.now()}`;
+  const away = await context.newPage();
+  try {
+    await page.bringToFront();
+    await page.evaluate(async (name) => {
+      const { application } = await import("/js/entries/editor.js");
+      const c = application.getControllerForElementAndIdentifier(document.querySelector(".app"), "workspace");
+      const storage = await navigator.storage.getDirectory();
+      const root = await storage.getDirectoryHandle(name, { create: true });
+      const handle = await root.getFileHandle("A.md", { create: true });
+      const writer = await handle.createWritable();
+      await writer.write("original");
+      await writer.close();
+      await c.loadNativeWorkspace(root);
+      await c.openNode("A.md");
+      globalThis.refreshController = c;
+      globalThis.refreshWrites = 0;
+      const create = c.project.fileHandle.createWritable.bind(c.project.fileHandle);
+      c.project.fileHandle.createWritable = (...args) => {
+        globalThis.refreshWrites++;
+        return create(...args);
+      };
+    }, directoryName);
+    await away.goto("/");
+    await away.bringToFront();
+    await away.evaluate(async (name) => {
+      const storage = await navigator.storage.getDirectory();
+      const root = await storage.getDirectoryHandle(name);
+      const file = await root.getFileHandle("A.md");
+      const writer = await file.createWritable();
+      await writer.write("fresh from disk");
+      await writer.close();
+    }, directoryName);
+    await page.bringToFront();
+    // Headless Chromium keeps background pages visible; dispatch window activation explicitly.
+    await page.evaluate(() => dispatchEvent(new Event("focus")));
+    await expect(page.locator(".cm-content")).toHaveText("fresh from disk");
+    await expect(page.locator('[data-workspace-target="statusText"]')).toHaveText("Обновлено с диска");
+    await page.locator(".cm-content").fill("unsaved draft");
+    await page.evaluate(() => globalThis.refreshController.editor.cancelSave());
+    await away.bringToFront();
+    await away.evaluate(async (name) => {
+      const storage = await navigator.storage.getDirectory();
+      const root = await storage.getDirectoryHandle(name);
+      const file = await root.getFileHandle("A.md");
+      const writer = await file.createWritable();
+      await writer.write("another external version");
+      await writer.close();
+    }, directoryName);
+    await page.bringToFront();
+    // Headless Chromium keeps background pages visible; dispatch window activation explicitly.
+    await page.evaluate(() => dispatchEvent(new Event("focus")));
+    await expect(page.locator(".cm-content")).toHaveText("unsaved draft");
+    expect(await page.evaluate(() => globalThis.refreshWrites)).toBe(0);
+    expect(
+      await page.evaluate(async () => {
+        const file = await globalThis.refreshController.project.fileHandle.getFile();
+        return file.text();
+      }),
+    ).toBe("another external version");
+  } finally {
+    await away.close();
+    await page.evaluate(async (name) => {
+      const storage = await navigator.storage.getDirectory();
+      await storage.removeEntry(name, { recursive: true });
+    }, directoryName);
+  }
+});
