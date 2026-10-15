@@ -1,0 +1,49 @@
+.open-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 150;
+  width: 180px;
+  padding: 5px;
+  background: var(--bg-grouped);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.open-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.open-menu button:hover,
+.open-menu button:focus-visible {
+  outline: none;
+  background: var(--accent-fill);
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 400;
+  min-width: 180px;
+  padding: 5px;
+  background: var(--bg-grouped);
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  border-radius: 6px;
+}
+
+.context-menu button:hover {
+  background: var(--bg-fill);
+}

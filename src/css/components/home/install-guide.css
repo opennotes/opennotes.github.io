@@ -1,0 +1,86 @@
+.installation {
+  max-width: 600px;
+  margin: 64px auto;
+}
+
+.installation h1 {
+  font-size: clamp(30px, 5vw, 40px);
+}
+
+.installation > p {
+  margin: 20px 0 28px;
+  color: var(--secondary);
+}
+
+.installation label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-bottom: 28px;
+  font-size: 14px;
+}
+
+.installation [data-install-status]:empty {
+  display: none;
+}
+
+.installation select {
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  font: inherit;
+  color: var(--label);
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.installation select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.browser-guide {
+  padding: 24px;
+  margin: 0 0 28px;
+  background: var(--fill);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.browser-guide h2 {
+  margin-bottom: 16px;
+}
+
+.browser-guide ol {
+  padding-left: 24px;
+  margin: 0;
+}
+
+.browser-guide li + li {
+  margin-top: 12px;
+}
+
+.browser-guide p {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--secondary);
+}
+
+.installation-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+}
+
+@media (width <= 560px) {
+  .installation {
+    margin-block: 32px;
+  }
+
+  .browser-guide {
+    padding: 20px;
+  }
+}

@@ -14,7 +14,7 @@ function environment(options = {}) {
   } = options;
   document.body.innerHTML = minimal
     ? ""
-    : `<div data-install-tip></div><div tabindex="-1" data-install-guide hidden></div><install data-native-install><button data-install-app hidden></button><a data-install-fallback></a></install><p data-install-status></p>`;
+    : `<div data-install-tip></div><div tabindex="-1" data-install-guide hidden></div><install data-native-install><button data-install-app hidden></button><a data-install-fallback></a></install><a data-install-open hidden></a><p data-install-status></p>`;
   const window = new EventTarget();
   window.matchMedia = () => ({ matches: standalone });
   window.isSecureContext = secure;
@@ -167,6 +167,37 @@ it("keeps native installation active when a legacy prompt is available", () => {
   fire(button, "click");
   expect(button.disabled).toBe(false);
   fire(env.window, "appinstalled");
+});
+it("replaces successful installation with an editor link and ignores later prompts", () => {
+  const env = environment();
+  setupInstall(env);
+  fire(env.window, "appinstalled");
+  expect(document.querySelector("[data-install-app]").hidden).toBe(true);
+  expect(document.querySelector("[data-install-fallback]").hidden).toBe(true);
+  expect(document.querySelector("[data-native-install]").hidden).toBe(true);
+  expect(document.querySelector("[data-install-open]").hidden).toBe(false);
+  expect(document.querySelector("[data-install-guide]").hidden).toBe(true);
+  expect(fire(env.window, "beforeinstallprompt").defaultPrevented).toBe(false);
+});
+it("handles native installation completion without the legacy result event", () => {
+  const env = environment({ native: true });
+  setupInstall(env);
+  fire(document.querySelector("[data-native-install]"), "promptaction");
+  expect(document.querySelector("[data-install-open]").hidden).toBe(false);
+});
+it("preserves completion when appinstalled arrives before userChoice resolves", async () => {
+  const env = environment();
+  setupInstall(env);
+  fire(env.window, "beforeinstallprompt", {
+    prompt: async () => {
+      fire(env.window, "appinstalled");
+    },
+    userChoice: Promise.resolve({ outcome: "accepted" }),
+  });
+  fire(document.querySelector("[data-install-app]"), "click");
+  await vi.waitFor(() => expect(document.querySelector("[data-install-app]").disabled).toBe(false));
+  expect(document.querySelector("[data-install-status]").textContent).toContain("установлено");
+  expect(document.querySelector("[data-install-fallback]").hidden).toBe(true);
 });
 it("supports browsers without installation buttons", () => {
   const env = environment();

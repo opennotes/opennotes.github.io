@@ -1,0 +1,21 @@
+.questions {
+  padding-bottom: 24px;
+}
+
+.questions details {
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+}
+
+.questions summary {
+  width: fit-content;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.questions p {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--secondary);
+}

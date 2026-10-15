@@ -16,7 +16,11 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     rolldownOptions: {
-      input: { home: path.resolve(sourceRoot, "index.html"), editor: path.resolve(sourceRoot, "edit.html") },
+      input: {
+        home: path.resolve(sourceRoot, "index.html"),
+        editor: path.resolve(sourceRoot, "edit.html"),
+        install: path.resolve(sourceRoot, "install.html"),
+      },
     },
   },
   test: {

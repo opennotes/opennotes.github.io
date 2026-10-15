@@ -1,0 +1,57 @@
+.preview {
+  position: relative;
+  margin: 4px 0 44px;
+  isolation: isolate;
+}
+
+.preview::before {
+  position: absolute;
+  inset: -64px -16px -20px;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(ellipse at 25% 35%, var(--wash), transparent 65%),
+    radial-gradient(ellipse at 75% 40%, var(--glow), transparent 65%);
+  mask-image: radial-gradient(ellipse, #000 50%, transparent 75%);
+}
+
+.preview picture {
+  display: block;
+  overflow: hidden;
+  background: var(--fill);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .preview::before {
+    display: none;
+  }
+}
+
+.preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 11 / 6;
+}
+
+.preview figcaption {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--secondary);
+  text-align: center;
+}
+
+@media (width <= 560px) {
+  .preview {
+    margin-bottom: 44px;
+  }
+
+  .preview figcaption {
+    font-size: 12px;
+    text-wrap: balance;
+  }
+}

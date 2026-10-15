@@ -1,5 +1,5 @@
 import { undo } from "@codemirror/commands";
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 
 import { mount, fileHandle, directory, project } from "../support/workspace.js";
@@ -182,8 +182,9 @@ describe("File syntax and formatting controls", () => {
   ])("opens %s with syntax and disables Markdown actions", async (name, text) => {
     await project(c, directory("Code", [fileHandle(name, text)]));
     await c.openNode(name);
-    expect(syntaxTree(c.editor.view.state)).toHaveLength(text.length);
-    expect(syntaxTree(c.editor.view.state).topNode.firstChild).not.toBeNull();
+    const tree = ensureSyntaxTree(c.editor.view.state, text.length, 1000);
+    expect(tree).toHaveLength(text.length);
+    expect(tree.topNode.firstChild).not.toBeNull();
     expect(c.editor.editorTarget.querySelector(".cm-lineNumbers")).toBeNull();
     expect(c.editor.toolbarTarget.querySelectorAll(".tool-btn:disabled")).toHaveLength(10);
     c.editor.bold();

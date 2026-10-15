@@ -1,0 +1,134 @@
+.editor-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-host {
+  height: 100%;
+}
+
+.editor-host[hidden] {
+  display: none !important;
+}
+
+.cm-editor {
+  height: 100%;
+  font-size: 15px;
+  background: var(--bg) !important;
+}
+
+.cm-editor .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-content {
+  padding: 20px 24px !important;
+  color: var(--label);
+  caret-color: var(--cm-caret);
+}
+
+.cm-gutters {
+  color: var(--label-secondary) !important;
+  background: var(--cm-gutter) !important;
+  border-right: 0.5px solid var(--separator) !important;
+}
+
+.cm-activeLineGutter {
+  background: transparent !important;
+}
+
+.cm-activeLine {
+  background: var(--cm-active) !important;
+}
+
+.cm-selectionBackground {
+  background: var(--accent-fill) !important;
+}
+
+.cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 28%, transparent) !important;
+}
+
+.cm-md-token-heading-1,
+.cm-md-token-heading-2,
+.cm-md-token-heading-3,
+.cm-md-token-heading-4,
+.cm-md-token-heading-5 {
+  font-family: var(--font);
+  font-weight: 700;
+  color: var(--label);
+}
+
+.cm-md-token-strong {
+  font-weight: 700;
+}
+
+.cm-md-token-emphasis {
+  font-style: italic;
+}
+
+.cm-md-token-link {
+  color: var(--accent);
+}
+
+.cm-md-token-url {
+  color: var(--accent);
+  opacity: 0.75;
+}
+
+.cm-md-token-quote {
+  color: var(--green);
+}
+
+.cm-md-token-code {
+  color: var(--red);
+}
+
+.cm-md-token-separator {
+  color: var(--label-tertiary);
+}
+
+.cm-md-token-markup {
+  color: var(--label-tertiary);
+}
+
+.cm-md-marker {
+  color: var(--label-tertiary);
+}
+
+.cm-md-code-fence {
+  color: var(--code-fence);
+}
+
+.cm-md-heading-1 {
+  font-size: 1.5em;
+}
+
+.cm-md-heading-2 {
+  font-size: 1.3em;
+}
+
+.cm-md-heading-3 {
+  font-size: 1.15em;
+}
+
+.cm-md-heading-4 {
+  font-size: 1.08em;
+}
+
+.cm-md-heading-5 {
+  font-size: 1.04em;
+}
+
+@media (width <= 768px) {
+  .cm-content {
+    padding: 16px !important;
+  }
+}

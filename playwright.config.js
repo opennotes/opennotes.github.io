@@ -15,9 +15,29 @@ export default defineConfig({
   },
   projects: isPreview
     ? [
-        { name: "dist", testMatch: "dist.spec.js" },
-        { name: "dist-firefox", testMatch: "dist.spec.js", use: { ...devices["Desktop Firefox"] } },
-        { name: "dist-webkit", testMatch: "dist.spec.js", use: { ...devices["Desktop Safari"] } },
+        {
+          name: "dist",
+          testMatch: [
+            "dist.spec.js",
+            "install.spec.js",
+          ],
+        },
+        {
+          name: "dist-firefox",
+          testMatch: [
+            "dist.spec.js",
+            "install.spec.js",
+          ],
+          use: { ...devices["Desktop Firefox"] },
+        },
+        {
+          name: "dist-webkit",
+          testMatch: [
+            "dist.spec.js",
+            "install.spec.js",
+          ],
+          use: { ...devices["Desktop Safari"] },
+        },
       ]
     : [
         { name: "chromium", testMatch: "regressions.spec.js" },

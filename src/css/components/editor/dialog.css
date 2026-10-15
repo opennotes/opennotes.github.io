@@ -1,0 +1,81 @@
+dialog {
+  width: min(560px, calc(100vw - 32px));
+  padding: 0;
+  margin: auto;
+  color: var(--label);
+  background: var(--bg-grouped);
+  border: 1px solid var(--separator);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 30%);
+  backdrop-filter: blur(3px);
+}
+
+.dialog-body {
+  padding: 20px;
+}
+
+.dialog-body h2 {
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.dialog-body p {
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--label-secondary);
+}
+
+.dialog-input {
+  width: 100%;
+  padding: 12px;
+  font: inherit;
+  color: var(--label);
+  outline-color: var(--accent);
+  background: var(--bg-fill);
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.dialog-error {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--red);
+}
+
+.creation-type {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--label-secondary);
+}
+
+.creation-type select {
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--label);
+  background: var(--bg-fill);
+  border: 1px solid var(--separator);
+  border-radius: 6px;
+}
+
+.dialog-body .creation-path {
+  padding-bottom: 4px;
+  margin: 8px 0 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}

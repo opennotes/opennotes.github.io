@@ -1,1 +1,0 @@
-import"./install-DHRs387L.js";function e(e=globalThis){let{matchMedia:t,navigator:n,document:r,location:i}=e;(t(`(display-mode: standalone)`).matches||n.standalone===!0)&&(r.documentElement.style.visibility=`hidden`,i.replace(new URL(`edit.html?app=1`,i.href)))}e();

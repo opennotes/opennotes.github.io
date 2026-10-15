@@ -1,3 +1,5 @@
+import { installButtonLabel } from "./install-guide.js";
+
 const INSTALL_SELECTORS = {
   guide: "[data-install-guide]",
   "native-install": "[data-native-install]",
@@ -5,6 +7,7 @@ const INSTALL_SELECTORS = {
   fallback: "[data-install-fallback]",
   status: "[data-install-status]",
   tip: "[data-install-tip]",
+  open: "[data-install-open]",
 };
 
 class BrowserInstall {
@@ -23,6 +26,9 @@ class BrowserInstall {
     this.installButton = this.find("app");
     this.installFallback = this.find("fallback");
     this.installStatus = this.find("status");
+    this.openEditor = this.find("open");
+    this.installed = this.isStandalone;
+    this.installAccepted = false;
     this.installPrompt = undefined;
     const hasNativeElement = Boolean(this.nativeInstall) && "HTMLInstallElement" in environment.window;
     const isSecurePage = environment.window.isSecureContext && environment.location.protocol !== "file:";
@@ -66,6 +72,10 @@ class BrowserInstall {
   setupHints() {
     const tip = this.find("tip");
 
+    if (this.installButton) {
+      this.installButton.textContent = installButtonLabel(this.environment.navigator);
+    }
+
     if (tip) {
       tip.hidden = this.isStandalone;
     }
@@ -98,12 +108,14 @@ class BrowserInstall {
    * Display the available browser prompt or guide link.
    */
   showLegacyInstall() {
+    const hideInstallation = this.installed || this.installAccepted;
+
     if (this.installButton) {
-      this.installButton.hidden = !this.installPrompt;
+      this.installButton.hidden = hideInstallation || !this.installPrompt;
     }
 
     if (this.installFallback) {
-      this.installFallback.hidden = Boolean(this.installPrompt);
+      this.installFallback.hidden = hideInstallation || Boolean(this.installPrompt);
     }
   }
   /**
@@ -144,6 +156,7 @@ class BrowserInstall {
     this.nativeInstall.classList.add("native-install");
     this.hideLegacyControls();
     this.nativeInstall.addEventListener("installresult", (event) => this.installResult(event));
+    this.nativeInstall.addEventListener("promptaction", () => this.markInstalled());
     this.nativeInstall.addEventListener("promptdismiss", () =>
       this.setStatus("Установка отменена. Вы можете попробовать ещё раз."),
     );
@@ -169,7 +182,7 @@ class BrowserInstall {
    */
   installResult(event) {
     if (event.result === "success") {
-      this.setStatus("Установка завершена. Open Notes доступно в списке приложений.");
+      this.markInstalled();
 
       return;
     }
@@ -209,7 +222,7 @@ class BrowserInstall {
   connectPrompts() {
     const { window } = this.environment;
     window.addEventListener("beforeinstallprompt", (event) => {
-      if (!this.installButton || this.isStandalone) {
+      if (!this.installButton || this.installed) {
         return;
       }
 
@@ -220,14 +233,28 @@ class BrowserInstall {
       }
     });
     this.installButton?.addEventListener("click", () => this.promptInstall());
-    window.addEventListener("appinstalled", () => {
-      this.installPrompt = null;
-      if (!this.shouldUseNativeInstall) {
-        this.showLegacyInstall();
-      }
+    window.addEventListener("appinstalled", () => this.markInstalled());
+  }
+  /**
+   * Replace installation controls with a confirmed result and editor link.
+   */
+  markInstalled() {
+    this.installed = true;
+    this.installPrompt = null;
+    this.hideLegacyControls();
+    if (this.nativeInstall) {
+      this.nativeInstall.hidden = true;
+    }
 
-      this.setStatus("Приложение установлено. Следующий запуск — из Dock.");
-    });
+    if (this.guide) {
+      this.guide.hidden = true;
+    }
+
+    if (this.openEditor) {
+      this.openEditor.hidden = false;
+    }
+
+    this.setStatus("Open Notes установлено. Запускайте его из списка приложений или с главного экрана.");
   }
   /**
    * Request browser installation and restore the controls afterward.
@@ -239,12 +266,18 @@ class BrowserInstall {
 
     this.installButton.disabled = true;
     try {
-      await this.installPrompt.prompt();
-      const { outcome } = await this.installPrompt.userChoice;
+      const prompt = this.installPrompt;
+      await prompt.prompt();
+      const { outcome } = await prompt.userChoice;
+      this.installAccepted = outcome === "accepted";
+      if (this.installed) {
+        return;
+      }
+
       this.setStatus(
         outcome === "accepted"
-          ? "Open Notes установлено. Открывайте его из Dock или списка приложений."
-          : "Установку можно повторить через меню браузера.",
+          ? "Установка подтверждена. Дождитесь завершения установки браузером."
+          : "Установка отменена. Вы можете продолжить в браузере или открыть инструкцию установки.",
       );
     } catch {
       this.setStatus("Откройте меню браузера и выберите установку приложения.");

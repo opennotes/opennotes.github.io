@@ -1,4 +1,5 @@
-import { ICO } from "../ui/icons.js";
+import { parseCreationPath } from "../files/create.js";
+import { nodeIcon } from "../ui/file-icons.js";
 
 import WorkspaceComponent from "./workspace_component.js";
 
@@ -51,22 +52,6 @@ function compareNodes(a, b) {
 }
 
 /**
- * Choose the folder or file icon for a tree row.
- *
- * @param {object} node - Project node being read or modified.
- * @returns {string} Trusted SVG markup for this node kind.
- */
-function nodeIcon(node) {
-  if (node.kind === "directory") {
-    return ICO.chevron + ICO.folder;
-  }
-
-  const icon = /\.(md|markdown|mdx)$/i.test(node.name) ? ICO.md : ICO.file;
-
-  return `<span class="spacer"></span>${icon}`;
-}
-
-/**
  * Describe the consequences of renaming or deleting a node.
  *
  * @param {string} kind - File or directory kind.
@@ -116,16 +101,20 @@ export default class TreeController extends WorkspaceComponent {
     "actionInput",
     "actionError",
     "actionSubmit",
+    "creationOptions",
+    "creationKind",
+    "creationHint",
   ];
   /**
    * Create the state owned by this component.
    */
   initialize() {
+    this.actionInProgress = false;
     this.expanded = new Set();
     this.emptyElement = this.emptyTarget;
     this.focusedPath = null;
     this._onCancel = (event) => {
-      if (this.project.operationBusy) {
+      if (this.project.operationBusy || this.actionInProgress) {
         event.preventDefault();
       }
     };
@@ -821,6 +810,106 @@ export default class TreeController extends WorkspaceComponent {
   }
 
   /**
+   * Open the unified creation dialog at the project root.
+   */
+  createRoot() {
+    this.startCreation("");
+  }
+
+  /**
+   * Create inside the context folder or beside the context file.
+   */
+  createSelected() {
+    const node = this.project.nodes.get(this.contextPath);
+
+    if (node) {
+      this.startCreation(node.kind === "directory" ? this.contextPath : node.parentPath);
+    }
+  }
+
+  /**
+   * Configure one creation form shared by all project locations.
+   *
+   * @param {string} parentPath - Destination directory relative to the project.
+   */
+  startCreation(parentPath) {
+    this.closeContextMenu();
+    if (this.project.operationBusy || this.actionInProgress) {
+      return;
+    }
+
+    this.workspace.closeOpenMenu();
+    this.pendingAction = { kind: "create", path: parentPath };
+    this.creationOverride = "";
+    this.actionTitleTarget.textContent = "Создать";
+    this.actionDescriptionTarget.textContent = this.project.dirHandle
+      ? "Недостающие папки создадутся автоматически."
+      : "Создаётся в проекте. Файлы можно скачать.";
+    this.actionInputTarget.hidden = false;
+    this.actionInputTarget.value = "";
+    this.actionInputTarget.placeholder = "папка/файл.md";
+    this.actionInputTarget.setAttribute(LABEL_ATTRIBUTE, "Путь");
+    this.creationOptionsTarget.hidden = false;
+    this.creationKindTarget.value = "directory";
+    this.updateCreation();
+    this.actionErrorTarget.textContent = "";
+    this.actionSubmitTarget.textContent = "Создать";
+    this.actionSubmitTarget.disabled = false;
+    this.actionDialogTarget.showModal();
+    this.actionInputTarget.focus();
+  }
+
+  /**
+   * Remember an explicit file or folder choice for this dialog.
+   */
+  chooseCreationKind() {
+    this.creationOverride = this.creationKindTarget.value;
+    this.updateCreation();
+  }
+
+  /**
+   * Preview the inferred object type as its relative path is entered.
+   */
+  updateCreation() {
+    if (this.pendingAction?.kind !== "create") {
+      return;
+    }
+
+    try {
+      const result = parseCreationPath(this.actionInputTarget.value, this.creationOverride);
+      this.creationKindTarget.value = result.kind;
+      this.showCreationPath(result.path, result.kind);
+      this.actionErrorTarget.textContent = "";
+    } catch {
+      this.showCreationPath(this.actionInputTarget.value.trim(), this.creationKindTarget.value);
+    }
+  }
+
+  /**
+   * Show the complete project path without exposing unavailable OS paths.
+   *
+   * @param {string} path - Path entered relative to the chosen parent.
+   * @param {string} kind - Inferred or explicitly selected entry kind.
+   */
+  showCreationPath(path, kind) {
+    const root = this.project.workspaceIsDirectory
+      ? this.workspace.rootNameTarget.textContent
+      : "Новый проект";
+
+    const parent = this.pendingAction.path;
+
+    const fullPath = [
+      root,
+      parent,
+      path,
+    ]
+      .filter(Boolean)
+      .join("/");
+
+    this.creationHintTarget.textContent = `${kind === "file" ? "Файл" : "Папка"} · ${fullPath}`;
+  }
+
+  /**
    * Open the rename dialog for the selected node.
    */
   renameSelected() {
@@ -843,7 +932,7 @@ export default class TreeController extends WorkspaceComponent {
     this.contextMenuTarget.hidden = true;
     const node = this.project.nodes.get(this.contextPath);
 
-    if (!node || this.project.operationBusy) {
+    if (!node || this.project.operationBusy || this.actionInProgress) {
       return;
     }
 
@@ -869,6 +958,9 @@ export default class TreeController extends WorkspaceComponent {
    * @param {object} node - Project node being read or modified.
    */
   configureAction(kind, node) {
+    this.creationOptionsTarget.hidden = true;
+    this.actionInputTarget.placeholder = "";
+    this.actionInputTarget.setAttribute(LABEL_ATTRIBUTE, "Новое имя");
     const labels = actionLabels(kind, node, Boolean(this.project.dirHandle));
     this.actionTitleTarget.textContent = labels.title;
     this.actionDescriptionTarget.textContent = labels.description;
@@ -895,7 +987,7 @@ export default class TreeController extends WorkspaceComponent {
    * Close the file operation dialog without changing files.
    */
   cancelAction() {
-    if (!this.project.operationBusy) {
+    if (!this.project.operationBusy && !this.actionInProgress) {
       this.actionDialogTarget.close();
     }
   }
@@ -907,12 +999,12 @@ export default class TreeController extends WorkspaceComponent {
    */
   async submitAction(event) {
     event.preventDefault();
-    if (this.project.operationBusy || !this.pendingAction) {
+    if (this.project.operationBusy || this.actionInProgress || !this.pendingAction) {
       return;
     }
 
     const { kind, path } = this.pendingAction;
-    const node = this.project.nodes.get(path);
+    const node = kind === "create" ? { parentPath: path } : this.project.nodes.get(path);
 
     if (!node) {
       this.actionDialogTarget.close();
@@ -921,14 +1013,46 @@ export default class TreeController extends WorkspaceComponent {
     }
 
     try {
-      this.actionSubmitTarget.disabled = true;
-      await this.applyAction(kind, path, node);
+      this.setActionBusy(true);
+      const result = await this.applyAction(kind, path, node);
       this.actionDialogTarget.close();
+      if (kind === "create") {
+        this.focusCreation(result);
+      }
     } catch (error) {
       this.actionErrorTarget.textContent = this.workspace.errMsg(error);
     } finally {
-      this.actionSubmitTarget.disabled = false;
+      this.setActionBusy(false);
     }
+  }
+  /**
+   * Freeze the form while one operation owns the dialog.
+   *
+   * @param {boolean} busy - Whether a form submission is pending.
+   */
+  setActionBusy(busy) {
+    this.actionInProgress = busy;
+    for (const control of [
+      this.actionSubmitTarget,
+      this.actionInputTarget,
+      this.creationKindTarget,
+    ]) {
+      control.disabled = busy;
+    }
+  }
+  /**
+   * Focus the new entry after the modal releases its focus trap.
+   *
+   * @param {object} result - Created entry's path and kind.
+   */
+  focusCreation(result) {
+    if (result.kind === "file" && this.workspace.editor.hasDocument) {
+      this.workspace.editor.view.focus();
+
+      return;
+    }
+
+    this.focusTreeItem(result.path);
   }
   /**
    * Validate a rename or apply the requested deletion.
@@ -936,8 +1060,17 @@ export default class TreeController extends WorkspaceComponent {
    * @param {string} kind - File or directory kind.
    * @param {string} path - Project-relative file or directory path.
    * @param {object} node - Project node being read or modified.
+   * @returns {Promise<object|undefined>} Created entry or completion of another operation.
    */
   async applyAction(kind, path, node) {
+    if (kind === "create") {
+      return await this.workspace.createNode({
+        parentPath: path,
+        path: this.actionInputTarget.value,
+        kind: this.creationOverride,
+      });
+    }
+
     if (kind !== "rename") {
       await this.workspace.removeNode(path);
 

@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 
+import { createEntry } from "../files/create.js";
 import { IgnoreFileCache } from "../files/ignore-cache.js";
 import { Project } from "../files/project.js";
 import { ProjectReader } from "../files/reader.js";
@@ -16,6 +17,7 @@ function hasFSAccess() {
 
 const ACCESS_TOAST_DURATION = 7000;
 const CLEANUP_TOAST_DURATION = 8000;
+const OPERATION_PENDING = "Дождитесь завершения текущей операции.";
 
 export default class WorkspaceController extends Controller {
   static outlets = [
@@ -878,6 +880,64 @@ export default class WorkspaceController extends Controller {
   }
 
   /**
+   * Create a project entry while protecting the active draft and filesystem.
+   *
+   * @param {object} request - Parent directory, relative path and optional kind.
+   * @returns {Promise<object>} Created entry's path and kind.
+   */
+  async createNode(request) {
+    if (this.project.operationBusy || !this.openingTarget.hidden) {
+      throw new Error(OPERATION_PENDING);
+    }
+
+    if (!this.project.dirHandle && typeof this.project.fileHandle?.createWritable === "function") {
+      throw new Error("Для создания на диске откройте содержащую файл папку.");
+    }
+
+    this.project.operationBusy = true;
+    this.editor.setBusy(true);
+    let result;
+
+    try {
+      if (!(await this.editor.save())) {
+        throw new Error("Не удалось сохранить текущий файл. Создание отменено.");
+      }
+
+      result = await createEntry(this.project, request);
+      this.commitCreatedNode(result);
+    } finally {
+      this.finishFileOperation();
+    }
+
+    if (result.kind === "file") {
+      await this.openNode(result.path);
+    }
+
+    return result;
+  }
+
+  /**
+   * Reveal a committed creation and invalidate project search results.
+   *
+   * @param {object} result - Created entry's path and kind.
+   */
+  commitCreatedNode(result) {
+    if (!this.project.workspaceIsDirectory) {
+      this.project.workspaceIsDirectory = true;
+      this.setProjectName("Новый проект");
+    }
+
+    if (result.kind === "directory") {
+      this.tree.expanded.add(result.path);
+    }
+
+    this.refreshAfterOperation();
+    this.tree.selectPath(result.path);
+    this.tree.focusTreeItem(result.path);
+    this.setStatus(this.project.dirHandle ? "Создано на диске" : "Создано в проекте", "saved");
+  }
+
+  /**
    * Coordinate disk and tree updates when moving a project node.
    *
    * @param {string} path - Project-relative file or directory path.
@@ -923,7 +983,7 @@ export default class WorkspaceController extends Controller {
    */
   canMoveNode(path, destination, options) {
     if (this.project.operationBusy) {
-      return this.rejectMove(new Error("Дождитесь завершения текущей операции."), options);
+      return this.rejectMove(new Error(OPERATION_PENDING), options);
     }
 
     if (destination === path || destination.startsWith(`${path}/`)) {
@@ -1034,7 +1094,7 @@ export default class WorkspaceController extends Controller {
    */
   async removeNode(path) {
     if (this.project.operationBusy) {
-      throw new Error("Дождитесь завершения текущей операции.");
+      throw new Error(OPERATION_PENDING);
     }
 
     const node = this.project.nodes.get(path);

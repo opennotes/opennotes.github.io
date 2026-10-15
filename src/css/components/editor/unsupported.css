@@ -1,0 +1,64 @@
+.unsupported {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 40px 28px;
+  text-align: center;
+  background: var(--bg-grouped);
+}
+
+.unsupported .icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 4px;
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  border-radius: 18px;
+}
+
+.unsupported .icon-wrap svg {
+  width: 36px;
+  height: 36px;
+}
+
+.unsupported h1 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.unsupported p {
+  max-width: 380px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--label-secondary);
+}
+
+.unsupported ul {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--label-secondary);
+  text-align: left;
+  list-style: none;
+}
+
+.unsupported ul li::before {
+  margin-right: 8px;
+  color: var(--label-tertiary);
+  content: "•";
+}
+
+.unsupported code {
+  padding: 2px 7px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--bg-fill);
+  border-radius: 5px;
+}

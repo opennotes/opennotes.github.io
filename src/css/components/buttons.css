@@ -1,0 +1,147 @@
+.icon-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s var(--ease);
+}
+
+.icon-btn:hover {
+  background: var(--bg-fill);
+}
+
+.icon-btn:active {
+  background: var(--bg-fill-active);
+}
+
+.icon-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.btn {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  transition:
+    background 0.15s var(--ease),
+    transform 0.1s var(--ease),
+    filter 0.15s var(--ease);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.btn svg {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+}
+
+.btn-filled {
+  color: #fff;
+  background: var(--accent);
+}
+
+.btn-filled:hover {
+  filter: brightness(1.06);
+}
+
+.btn-filled:active {
+  filter: brightness(0.94);
+}
+
+.btn-tinted {
+  color: var(--accent);
+  background: var(--accent-fill);
+}
+
+.btn-tinted:hover {
+  background: var(--bg-fill-hover);
+}
+
+.btn-plain {
+  color: var(--label);
+  background: var(--bg-fill);
+}
+
+.btn-plain:hover {
+  background: var(--bg-fill-hover);
+}
+
+.quiet-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 4px 8px;
+  font: 400 13px/1.4 var(--font);
+  color: var(--label-secondary);
+  text-decoration: none;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+}
+
+.quiet-action:hover {
+  color: var(--label);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.quiet-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.danger {
+  color: var(--red);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  font: 500 14px/1.5 var(--font);
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  background: var(--button-bg);
+  border: 0;
+  border-radius: 8px;
+}
+
+.button:hover {
+  background: #005bbf;
+}
+
+.button:active {
+  opacity: 0.85;
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+}

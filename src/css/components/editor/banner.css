@@ -1,0 +1,110 @@
+.banner {
+  z-index: 100;
+  display: none;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  padding-top: calc(12px + var(--safe-t));
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--banner-text);
+  text-wrap: balance;
+  background: var(--banner-bg);
+  border-bottom: 0.5px solid var(--banner-border);
+}
+
+.banner.visible {
+  display: flex;
+  grid-column: 1 / -1;
+}
+
+.banner svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  opacity: 0.9;
+}
+
+.banner-close {
+  display: grid;
+  flex: 0 0 44px;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -10px -8px 0;
+  color: var(--banner-text);
+  border-radius: var(--radius-sm);
+}
+
+.banner-close:hover {
+  background: var(--bg-fill);
+}
+
+.banner-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.banner-close svg {
+  margin: 0;
+}
+
+.banner strong {
+  font-weight: 600;
+}
+
+.banner details {
+  margin-top: 6px;
+}
+
+.banner summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.banner ol {
+  padding-left: 20px;
+  margin: 8px 0 0;
+}
+
+.banner li + li {
+  margin-top: 4px;
+}
+
+.banner code {
+  font-family: var(--font-mono);
+  user-select: all;
+}
+
+.banner a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.fallback-mode .banner {
+  color: var(--label);
+  background: var(--banner-bg);
+  border-color: var(--banner-border);
+}
+
+.fallback-mode .banner > svg {
+  margin-top: 2px;
+  color: var(--banner-text);
+}
+
+.fallback-mode .save-help-title {
+  color: var(--banner-text);
+}
+
+.save-help {
+  width: 100%;
+  min-width: 0;
+}
+
+.save-help-title {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.save-help-description {
+  color: var(--label-secondary);
+}

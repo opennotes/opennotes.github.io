@@ -156,6 +156,24 @@
               >Open Notes</span
             >
             <div class="sidebar-controls">
+              <button
+                type="button"
+                class="icon-btn"
+                data-action="tree#createRoot"
+                aria-label="Создать"
+                title="Создать в корне проекта"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
               <div class="sidebar-actions">
                 <button
                   type="button"
@@ -372,7 +390,14 @@
             </svg>
           </button>
           <div class="file-info">
-            <span class="file-path" data-editor-target="pathLabel"></span>
+            <button
+              type="button"
+              class="file-path"
+              data-editor-target="pathLabel"
+              data-action="editor#revealInTree"
+              aria-label="Показать в дереве"
+              title="Показать в дереве"
+            ></button>
             <button
               type="button"
               class="icon-btn download-btn"
@@ -502,38 +527,55 @@
               </button>
             </div>
             <div class="install-tip" data-install-tip hidden>
-              <p id="install-guide" data-install-guide tabindex="-1" hidden>
-                В Safari: <strong>Файл → Добавить в Dock</strong>. В Chrome: нажмите значок установки в
-                адресной строке.
-              </p>
               <install data-native-install>
                 <button type="button" class="quiet-action" data-install-app hidden>
                   Установить Open Notes
                 </button>
-                <a class="quiet-action" href="#install-guide" data-install-fallback>Установить приложение</a>
+                <a class="quiet-action" href="install.html" data-install-fallback>Как установить</a>
               </install>
               <p data-install-status role="status"></p>
             </div>
           </div>
           <div class="editor-host" data-editor-target="editor" hidden></div>
         </div>
+        <div class="cursor-position" data-editor-target="cursorPosition" hidden></div>
       </main>
 
       <div class="context-menu" data-tree-target="contextMenu" hidden>
+        <button type="button" data-action="tree#createSelected">Создать…</button>
         <button type="button" data-action="tree#renameSelected">Переименовать…</button>
         <button type="button" data-action="tree#copyPath">Копировать путь</button>
         <button type="button" class="danger" data-action="tree#deleteSelected">Удалить…</button>
       </div>
-      <dialog data-tree-target="actionDialog">
+      <dialog
+        data-tree-target="actionDialog"
+        aria-labelledby="file-action-title"
+        aria-describedby="file-action-description"
+      >
         <form class="dialog-body" data-action="submit->tree#submitAction">
-          <h2 data-tree-target="actionTitle"></h2>
-          <p data-tree-target="actionDescription"></p>
+          <h2 id="file-action-title" data-tree-target="actionTitle"></h2>
+          <p id="file-action-description" data-tree-target="actionDescription"></p>
           <input
             class="dialog-input"
             data-tree-target="actionInput"
+            data-action="input->tree#updateCreation"
             aria-label="Новое имя"
             autocomplete="off"
           />
+          <div data-tree-target="creationOptions" hidden>
+            <label class="creation-type">
+              Тип
+              <select
+                data-tree-target="creationKind"
+                data-action="change->tree#chooseCreationKind"
+                aria-label="Тип объекта"
+              >
+                <option value="directory">Папка</option>
+                <option value="file">Файл</option>
+              </select>
+            </label>
+            <p class="creation-path" data-tree-target="creationHint" aria-live="polite"></p>
+          </div>
           <div class="dialog-error" data-tree-target="actionError" role="alert"></div>
           <div class="dialog-footer">
             <button type="button" class="btn btn-plain" data-action="tree#cancelAction">Отмена</button>

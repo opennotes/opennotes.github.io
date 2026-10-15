@@ -19,6 +19,7 @@ import WorkspaceComponent from "./workspace_component.js";
 
 const DOWNLOAD_URL_LIFETIME = 1000;
 const AUTOSAVE_DELAY = 600;
+const MOBILE_WIDTH = 768;
 
 export default class EditorController extends WorkspaceComponent {
   static classes = [
@@ -32,6 +33,7 @@ export default class EditorController extends WorkspaceComponent {
     "pathLabel",
     "download",
     "lineNumbers",
+    "cursorPosition",
   ];
   /**
    * Create the state owned by this component.
@@ -299,6 +301,27 @@ export default class EditorController extends WorkspaceComponent {
   }
 
   /**
+   * Reveal the active file and focus its row without reopening the document.
+   */
+  revealInTree() {
+    const path = this.project.currentPath;
+
+    if (!this.project.nodes.has(path) || this.project.operationBusy) {
+      return;
+    }
+
+    if (
+      innerWidth <= MOBILE_WIDTH &&
+      !this.workspace.sidebarTarget.classList.contains(this.workspace.openClass)
+    ) {
+      this.workspace.toggleSidebar();
+    }
+
+    this.workspace.tree.selectPath(path);
+    this.workspace.tree.focusTreeItem(path);
+  }
+
+  /**
    * Download the active draft or previewed file.
    */
   downloadFile() {
@@ -350,6 +373,7 @@ export default class EditorController extends WorkspaceComponent {
    * @param {string} type - Browser preview MIME type.
    */
   showObjectPreview(file, type) {
+    this.cursorPositionTarget.hidden = true;
     this.editorSession = null;
     this.view?.destroy();
     this.view = null;
@@ -491,6 +515,7 @@ export default class EditorController extends WorkspaceComponent {
    * @param {EditorState} state - CodeMirror state to mount.
    */
   mountEditor(state) {
+    this.updateCursorPosition(state);
     if (this.view) {
       this.view.setState(state);
 
@@ -499,6 +524,17 @@ export default class EditorController extends WorkspaceComponent {
 
     this.editorTarget.replaceChildren();
     this.view = new EditorView({ parent: this.editorTarget, state });
+  }
+  /**
+   * Show the one-based line and column of the active selection's cursor.
+   *
+   * @param {EditorState} state - Current editing state.
+   */
+  updateCursorPosition(state) {
+    const cursor = state.selection.main.head;
+    const line = state.doc.lineAt(cursor);
+    this.cursorPositionTarget.textContent = `Стр ${line.number} · Стлб ${cursor - line.from + 1}`;
+    this.cursorPositionTarget.hidden = false;
   }
   /**
    * Configure file syntax, editing history and change notifications.
@@ -524,6 +560,10 @@ export default class EditorController extends WorkspaceComponent {
           ...defaultKeymap,
         ]),
         EditorView.updateListener.of((update) => {
+          if (update.docChanged || update.selectionSet) {
+            this.updateCursorPosition(update.state);
+          }
+
           if (update.docChanged) {
             this.scheduleSave();
           }
@@ -536,6 +576,7 @@ export default class EditorController extends WorkspaceComponent {
    * Release the current document and restore the empty state.
    */
   closeEditor() {
+    this.cursorPositionTarget.hidden = true;
     this.editorSession = null;
     this.refreshPromise = null;
     this.workspace.openVersion++;

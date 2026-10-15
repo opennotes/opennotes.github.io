@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-page="home">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,9 +18,9 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg%20width%3D%2226%22%20height%3D%2226%22%20viewBox%3D%220%200%2026%2026%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cstyle%3E%3Aroot%20%7B%20color%3A%20%23000%3B%20%7D%20%40media%20%28prefers-color-scheme%3A%20dark%29%20%7B%20%3Aroot%20%7B%20color%3A%20%23fff%3B%20%7D%20%7D%3C%2Fstyle%3E%0A%3Cpath%20d%3D%22M22.28%2012.9564C23.5935%2011.6429%2024.3314%209.86144%2024.3314%208.00389C24.3314%206.14634%2023.5935%204.36488%2022.28%203.05139C20.9665%201.73791%2019.185%201%2017.3275%201C15.47%201%2013.6885%201.73791%2012.375%203.05139L4.5%2010.9264V20.8431H14.4167L22.28%2012.9564Z%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M17.3333%208.00977L1%2024.3431%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M19.0832%2016.1763H9.1665%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3C%2Fsvg%3E"
     />
-    <script type="module" crossorigin src="./assets/home-Du66BLA1.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/install-DHRs387L.js">
-    <link rel="stylesheet" crossorigin href="./assets/home-ClHQ5MS0.css">
+    <script type="module" crossorigin src="./assets/home-DFwok9D9.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/install-DzUjBZuO.js">
+    <link rel="stylesheet" crossorigin href="./assets/home-Be49F6tH.css">
   </head>
   <body>
     <a class="skip-link" href="#main">К содержимому</a>
@@ -101,7 +101,11 @@
             Простой редактор Markdown. Откройте свою папку, выберите заметку и начните писать.
           </p>
           <div class="actions">
-            <a class="button" href="edit.html?install=1">Установить на Mac</a>
+            <install data-native-install>
+              <button type="button" class="button" data-install-app hidden>Установить приложение</button>
+              <a class="button" href="install.html" data-install-fallback>Как установить</a>
+            </install>
+            <a class="button" href="edit.html" data-install-open hidden>Открыть редактор</a>
             <a class="text-link" href="edit.html">Попробовать в браузере</a>
           </div>
           <p class="intro-benefits">Без регистрации · Локальные файлы · Обычный Markdown</p>
@@ -183,7 +187,10 @@
           </details>
         </section>
       </main>
-      <footer class="footer">Open Notes</footer>
+      <footer class="footer">
+        <span>Open Notes · <a href="https://github.com/opennotes/opennotes.github.io">GitHub</a></span>
+        <a href="https://tabuna.github.io/">Alexandr Chernyaev</a>
+      </footer>
     </div>
   </body>
 </html>

@@ -1,0 +1,39 @@
+.features,
+.questions {
+  max-width: 720px;
+  margin-inline: auto;
+}
+
+.feature-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px 36px;
+}
+
+.feature-list h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.feature-list p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--secondary);
+}
+
+.ownership {
+  padding: 16px 0 0;
+  margin: 28px 0 32px;
+  font-size: 15px;
+  color: var(--secondary);
+  border-top: 1px solid var(--line);
+}
+
+@media (width <= 560px) {
+  .feature-list {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}

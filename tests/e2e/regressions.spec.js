@@ -228,3 +228,51 @@ test("Returning to the tab reloads clean disk changes and preserves unsaved draf
     }, directoryName);
   }
 });
+
+test("Native creation writes nested files without replacing existing contents", async ({ page }) => {
+  await page.goto("/edit.html");
+  await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
+  const directoryName = `creation-${Date.now()}`;
+  try {
+    await page.evaluate(async (name) => {
+      const { application } = await import("/js/entries/editor.js");
+      const c = application.getControllerForElementAndIdentifier(document.querySelector(".app"), "workspace");
+      const storage = await navigator.storage.getDirectory();
+      const root = await storage.getDirectoryHandle(name, { create: true });
+      const handle = await root.getFileHandle("existing.md", { create: true });
+      const writer = await handle.createWritable();
+      await writer.write("original");
+      await writer.close();
+      await c.loadNativeWorkspace(root);
+    }, directoryName);
+    const create = page.locator('[data-action="tree#createRoot"]');
+    const dialog = page.getByRole("dialog", { name: "Создать", exact: true });
+    await create.click();
+    await dialog.getByRole("textbox", { name: "Путь", exact: true }).fill("docs/nested/new.md");
+    await dialog.getByRole("button", { name: "Создать", exact: true }).click();
+    await expect(page.locator(".cm-content")).toBeFocused();
+    await page.keyboard.insertText("# New disk file");
+    await expect(page.locator('[data-workspace-target="statusText"]')).toHaveText("Сохранено");
+    await create.click();
+    await dialog.getByRole("textbox", { name: "Путь", exact: true }).fill("existing.md");
+    await dialog.getByRole("button", { name: "Создать", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toContainText("уже существует");
+    const contents = await page.evaluate(async (name) => {
+      const storage = await navigator.storage.getDirectory();
+      const root = await storage.getDirectoryHandle(name);
+      const docs = await root.getDirectoryHandle("docs");
+      const nested = await docs.getDirectoryHandle("nested");
+      const created = await nested.getFileHandle("new.md");
+      const existing = await root.getFileHandle("existing.md");
+      const createdFile = await created.getFile();
+      const existingFile = await existing.getFile();
+      return [await createdFile.text(), await existingFile.text()];
+    }, directoryName);
+    expect(contents).toEqual(["# New disk file", "original"]);
+  } finally {
+    await page.evaluate(async (name) => {
+      const storage = await navigator.storage.getDirectory();
+      await storage.removeEntry(name, { recursive: true });
+    }, directoryName);
+  }
+});

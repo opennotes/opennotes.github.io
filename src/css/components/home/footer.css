@@ -1,0 +1,12 @@
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  justify-content: space-between;
+  max-width: 720px;
+  padding: 20px 0 28px;
+  margin-inline: auto;
+  font-size: 12px;
+  color: var(--secondary);
+  border-top: 1px solid var(--line);
+}

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-page="home">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -100,7 +100,11 @@
             Простой редактор Markdown. Откройте свою папку, выберите заметку и начните писать.
           </p>
           <div class="actions">
-            <a class="button" href="edit.html?install=1">Установить на Mac</a>
+            <install data-native-install>
+              <button type="button" class="button" data-install-app hidden>Установить приложение</button>
+              <a class="button" href="install.html" data-install-fallback>Как установить</a>
+            </install>
+            <a class="button" href="edit.html" data-install-open hidden>Открыть редактор</a>
             <a class="text-link" href="edit.html">Попробовать в браузере</a>
           </div>
           <p class="intro-benefits">Без регистрации · Локальные файлы · Обычный Markdown</p>
@@ -182,7 +186,10 @@
           </details>
         </section>
       </main>
-      <footer class="footer">Open Notes</footer>
+      <footer class="footer">
+        <span>Open Notes · <a href="https://github.com/opennotes/opennotes.github.io">GitHub</a></span>
+        <a href="https://tabuna.github.io/">Alexandr Chernyaev</a>
+      </footer>
     </div>
     <script type="module" src="/js/entries/install.js"></script>
   </body>
