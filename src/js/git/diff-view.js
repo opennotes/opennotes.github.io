@@ -1,4 +1,4 @@
-import { MergeView, goToNextChunk, goToPreviousChunk, unifiedMergeView } from "@codemirror/merge";
+import { MergeView, getChunks, goToNextChunk, goToPreviousChunk, unifiedMergeView } from "@codemirror/merge";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 
@@ -15,27 +15,37 @@ export class DiffView {
    *
    * @param {HTMLElement} parent - Comparison viewport.
    * @param {object} data - Literal path and before/after contents.
-   * @param {boolean} isUnified - Whether to combine versions into one column.
+   * @param {object} options - Layout, line wrapping and selection callback.
    */
-  constructor(parent, data, isUnified) {
+  constructor(parent, data, options) {
     const extensions = [
       EditorState.readOnly.of(true),
       EditorView.editable.of(false),
       lineNumbers(),
-      fileLanguage(data.path),
+      fileLanguage(data.path, true),
+      options.hasWrapping ? EditorView.lineWrapping : [],
+      EditorState.phrases.of({ "$ unchanged lines": "$ неизменённых строк" }),
+      EditorView.updateListener.of((update) => {
+        if (update.selectionSet) {
+          options.onSelection?.();
+        }
+      }),
       keymap.of([
         { key: "F7", run: goToNextChunk },
         { key: "Shift-F7", run: goToPreviousChunk },
       ]),
     ];
 
-    if (isUnified) {
+    if (options.isUnified) {
       this.createUnified(parent, data, extensions);
+
+      this.revealFirst();
 
       return;
     }
 
     this.createSplit(parent, data, extensions);
+    this.revealFirst();
   }
   /**
    * Mount one inline read-only comparison with deleted lines included.
@@ -88,6 +98,37 @@ export class DiffView {
       collapseUnchanged: { margin: 4, minSize: 12 },
     });
     this.view = this.merge.b;
+  }
+  /**
+   * Describe the currently selected changed block for the compact navigation toolbar.
+   *
+   * @returns {object} One-based position and total changed blocks.
+   */
+  get position() {
+    const chunks = getChunks(this.view.state).chunks;
+    const following = chunks.findIndex((chunk) => chunk.fromB > this.view.state.selection.main.head);
+    const current = following === -1 ? chunks.length : Math.max(1, following);
+
+    return {
+      current,
+      total: chunks.length,
+    };
+  }
+  /**
+   * Start reading at the first change instead of the top of an unrelated document.
+   */
+  revealFirst() {
+    const first = getChunks(this.view.state).chunks[0];
+
+    if (!first) {
+      return;
+    }
+
+    const anchor = Math.min(first.fromB, this.view.state.doc.length);
+    this.view.dispatch({
+      selection: { anchor },
+      effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+    });
   }
   /**
    * Navigate changed blocks using the same commands as the keyboard shortcuts.

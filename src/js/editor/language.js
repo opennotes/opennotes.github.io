@@ -127,10 +127,11 @@ export function isMarkdown(path) {
  * Configure syntax and document decorations for the current file.
  *
  * @param {string} path - Current file name or project-relative path.
+ * @param {boolean} isSource - Whether to show literal source instead of document decorations.
  * @returns {import('@codemirror/state').Extension} Language-specific editor extensions.
  */
-export function fileLanguage(path) {
-  if (isMarkdown(path)) {
+export function fileLanguage(path, isSource = false) {
+  if (isMarkdown(path) && !isSource) {
     return [
       markdown(),
       syntaxHighlighting(markdownHighlightStyle),
@@ -141,7 +142,7 @@ export function fileLanguage(path) {
   }
 
   const extension = path.split(".").pop().toLowerCase();
-  const language = languages.get(extension);
+  const language = isMarkdown(path) ? markdown : languages.get(extension);
 
   return [
     language

@@ -1,4 +1,5 @@
 import { gitBranch, gitDirectories } from "../git/metadata.js";
+import { fileRow, navigateRows, selectRow } from "../git/navigation.js";
 import { GitReader } from "../git.js";
 
 import WorkspaceComponent from "./workspace_component.js";
@@ -22,6 +23,9 @@ const CHANGE_GROUPS = [
 ];
 
 const SHORT_OID_LENGTH = 8;
+const MOBILE_WIDTH = 768;
+const CURRENT_ATTRIBUTE = "aria-current";
+const CURRENT_ROW = '[aria-current="true"]';
 
 /**
  * Create a text-only node for repository data, never interpreting file contents.
@@ -53,7 +57,18 @@ export default class GitController extends WorkspaceComponent {
     "content",
     "fileHistoryTitle",
     "changeSection",
-    "fileSelect",
+    "commitFiles",
+    "commitFileList",
+    "historySection",
+    "changesTab",
+    "historyTab",
+    "branch",
+    "beforeLabel",
+    "afterLabel",
+    "counter",
+    "previous",
+    "next",
+    "wrapping",
     "diffControls",
     "layout",
     "versions",
@@ -69,8 +84,11 @@ export default class GitController extends WorkspaceComponent {
     this.main = undefined;
     this.filePath = null;
     this.diffView = null;
-    this.isUnified = false;
+    this.isUnified = window.innerWidth <= MOBILE_WIDTH;
+    this.hasLayoutPreference = false;
     this.DiffView = null;
+    this.mode = "changes";
+    this.hasWrapping = true;
   }
   /**
    * Remove obsolete helper credentials left by the previous version.
@@ -107,6 +125,7 @@ export default class GitController extends WorkspaceComponent {
    */
   open() {
     this.filePath = null;
+    this.mode = "changes";
     this.dialogTarget.showModal();
     void this.refresh();
   }
@@ -221,16 +240,22 @@ export default class GitController extends WorkspaceComponent {
    */
   async load(request, render) {
     const version = ++this.version;
-    this.statusTarget.textContent = "Читаем Git…";
+    this.patchTarget.setAttribute("aria-busy", "true");
+    if (!this.contentTarget.hidden) {
+      this.statusTarget.textContent = "";
+    }
+
     try {
       const data = await this.reader.request(...request);
 
       if (version === this.version) {
-        render(data);
         this.statusTarget.textContent = data.warning || "";
+        this.patchTarget.setAttribute("aria-busy", "false");
+        render(data);
       }
     } catch (error) {
       if (version === this.version) {
+        this.patchTarget.setAttribute("aria-busy", "false");
         this.statusTarget.textContent = error.message;
       }
     }
@@ -243,7 +268,8 @@ export default class GitController extends WorkspaceComponent {
   renderRepository(data) {
     this.controlsTarget.hidden = false;
     this.contentTarget.hidden = false;
-    this.repositoryTarget.textContent = `${data.root} · ${data.branch}`;
+    this.repositoryTarget.textContent = data.root;
+    this.branchTarget.textContent = data.branch;
     this.launchTarget.textContent = `Git · ${data.branch}`;
     this.launchTarget.title = data.root;
     this.changesTarget.replaceChildren();
@@ -254,9 +280,51 @@ export default class GitController extends WorkspaceComponent {
       }
     }
 
+    this.renderSidebar(data);
+
+    this.renderPlaceholder(data);
+    if (!this.dialogTarget.open) {
+      return;
+    }
+
+    if (this.mode === "changes") {
+      this.selectInitialChange();
+
+      return;
+    }
+
+    if (!this.filePath) {
+      this.selectHistory();
+    }
+  }
+  /**
+   * Give clean and unreadable repositories distinct, useful empty states.
+   *
+   * @param {object} data - Current repository status.
+   */
+  renderPlaceholder(data) {
+    this.headingTarget.textContent = this.filePath || "Изменения в проекте";
+    let message = "Выберите файл для сравнения.";
+
+    if (data.changes?.length === 0) {
+      message = "Нет локальных изменений.";
+    }
+
+    if (data.changes === null) {
+      message = "Не удалось прочитать изменения.";
+    }
+
+    this.renderPatch({ patch: message });
+  }
+  /**
+   * Reset sidebar lists and preserve the intended file-history scope.
+   *
+   * @param {object} data - Repository history page.
+   */
+  renderSidebar(data) {
     this.commitsTarget.replaceChildren();
-    this.fileSelectTarget.hidden = true;
-    this.changeSectionTarget.hidden = Boolean(this.filePath);
+    this.commitFilesTarget.hidden = true;
+    this.updateMode();
     this.workingVersionTarget.hidden = !this.filePath;
     this.fileHistoryTitleTarget.textContent = this.filePath
       ? `История · ${this.filePath}`
@@ -264,9 +332,25 @@ export default class GitController extends WorkspaceComponent {
     if (!this.filePath) {
       this.renderHistory(data);
     }
+  }
+  /**
+   * Open the current file's working changes, or the first available comparison.
+   */
+  selectInitialChange() {
+    const buttons = [
+      ...this.changesTarget.querySelectorAll("button"),
+    ];
 
-    this.headingTarget.textContent = `Ветка: ${data.branch}`;
-    this.renderPatch({ patch: "Выберите файл для сравнения." });
+    const current = buttons.find(
+      (button) => button.dataset.path === this.project.currentPath && button.dataset.area === "working",
+    );
+
+    const working = buttons.find((button) => button.dataset.area === "working");
+    const selected = current || working || buttons[0];
+
+    if (selected) {
+      void this.compareChange(selected);
+    }
   }
   /**
    * Keep index and worktree changes separate, including both versions of one file.
@@ -293,17 +377,13 @@ export default class GitController extends WorkspaceComponent {
 
       this.changesTarget.append(textNode("h3", title));
       for (const file of files) {
-        const previous = file.oldPath ? `${file.oldPath} → ` : "";
-        const button = textNode("button", `${file[field]}  ${previous}${file.path}`);
-
-        button.type = "button";
-        button.dataset.action = "git#selectChange";
-        button.dataset.path = file.path;
+        const button = fileRow({ path: file.path, status: file[field] }, "git#selectChange");
         button.dataset.area = area;
         this.changesTarget.append(button);
       }
     }
 
+    selectRow(this.changesTarget, null);
     if (changes.length === 0) {
       this.changesTarget.append(textNode("p", "Нет изменений. Рабочая папка чистая."));
     }
@@ -324,6 +404,7 @@ export default class GitController extends WorkspaceComponent {
       this.commitsTarget.append(button);
     }
 
+    selectRow(this.commitsTarget, this.commitsTarget.querySelector(CURRENT_ROW));
     this.moreTarget.hidden = !data.more;
     if (this.commitsTarget.childElementCount) {
       return;
@@ -338,10 +419,23 @@ export default class GitController extends WorkspaceComponent {
    * @param {Event} event - Selection from the status list.
    */
   async selectChange(event) {
-    const { path, area } = event.currentTarget.dataset;
-    this.headingTarget.textContent = `${path} · ${area === "staged" ? "HEAD → индекс" : "индекс → рабочая папка"}`;
+    await this.compareChange(event.currentTarget);
+  }
+  /**
+   * Compare the selected file without relying on asynchronous DOM action binding.
+   *
+   * @param {HTMLButtonElement} button - Selected file row with its comparison area.
+   */
+  async compareChange(button) {
+    const { path, area } = button.dataset;
+    this.headingTarget.textContent = path;
+    this.setVersions(
+      area === "staged" ? "Последний коммит · HEAD" : "Индекс · staged",
+      area === "staged" ? "Индекс · staged" : "Рабочая копия",
+    );
+    selectRow(this.changesTarget, button);
     this.clearDiff();
-    this.fileSelectTarget.hidden = true;
+    this.commitFilesTarget.hidden = true;
     await this.load(
       [
         "diff",
@@ -356,9 +450,19 @@ export default class GitController extends WorkspaceComponent {
    * @param {Event} event - Selection from the history list.
    */
   async selectCommit(event) {
-    const oid = event.currentTarget.dataset.oid;
+    await this.compareCommitRow(event.currentTarget);
+  }
+  /**
+   * Show the selected historical revision and keep its commit visibly selected.
+   *
+   * @param {HTMLButtonElement} button - Selected commit row.
+   */
+  async compareCommitRow(button) {
+    const oid = button.dataset.oid;
     this.commitOid = oid;
-    this.headingTarget.textContent = `Коммит ${oid.slice(0, SHORT_OID_LENGTH)}`;
+    selectRow(this.commitsTarget, button);
+    this.workingVersionTarget.setAttribute(CURRENT_ATTRIBUTE, "false");
+    this.setVersions("Предыдущая версия", `Коммит ${oid.slice(0, SHORT_OID_LENGTH)}`);
     this.clearDiff();
     if (this.filePath) {
       await this.load(
@@ -386,23 +490,42 @@ export default class GitController extends WorkspaceComponent {
    * @param {object} data - Literal paths changed in this commit.
    */
   renderCommit(data) {
-    this.fileSelectTarget.replaceChildren();
+    this.commitFileListTarget.replaceChildren();
     for (const path of data.files) {
-      const option = textNode("option", path);
-      option.value = path;
-      this.fileSelectTarget.append(option);
+      this.commitFileListTarget.append(fileRow({ path }, "git#commitFile"));
     }
 
-    this.fileSelectTarget.hidden = data.files.length === 0;
-    if (data.files.length > 0) {
-      void this.commitFile();
+    this.commitFilesTarget.hidden = data.files.length === 0;
+    if (data.files.length === 0) {
+      this.renderPatch({ patch: "В этом коммите нет изменений файлов." });
+
+      return;
     }
+
+    selectRow(this.commitFileListTarget, null);
+    void this.compareCommitFile(data.files[0]);
   }
   /**
-   * Compare the selected commit file with its first-parent version.
+   * Select a file within the chosen commit.
+   *
+   * @param {Event} event - Selected commit-file row.
    */
-  async commitFile() {
-    const path = this.fileSelectTarget.value;
+  async commitFile(event) {
+    await this.compareCommitFile(event.currentTarget.dataset.path);
+  }
+  /**
+   * Compare one commit file while keeping its path and selection visible.
+   *
+   * @param {string} path - Literal repository-relative file path.
+   */
+  async compareCommitFile(path) {
+    this.headingTarget.textContent = path;
+
+    const row = [
+      ...this.commitFileListTarget.querySelectorAll("button"),
+    ].find((button) => button.dataset.path === path);
+
+    selectRow(this.commitFileListTarget, row);
     await this.load(
       [
         "commitDiff",
@@ -434,6 +557,7 @@ export default class GitController extends WorkspaceComponent {
    */
   openFileHistory() {
     this.filePath = this.project.currentPath;
+    this.mode = "history";
     this.dialogTarget.showModal();
     void this.refresh();
   }
@@ -458,7 +582,10 @@ export default class GitController extends WorkspaceComponent {
    * Compare the active file's saved contents with HEAD, including staged changes.
    */
   async showWorking() {
-    this.headingTarget.textContent = `${this.filePath} · HEAD → рабочая версия`;
+    this.headingTarget.textContent = this.filePath;
+    this.setVersions("Последний коммит · HEAD", "Рабочая копия");
+    selectRow(this.commitsTarget, null);
+    this.workingVersionTarget.setAttribute(CURRENT_ATTRIBUTE, "true");
     await this.load(
       [
         "diff",
@@ -473,6 +600,7 @@ export default class GitController extends WorkspaceComponent {
   clearDiff() {
     this.diffView?.destroy();
     this.diffView = null;
+    this.patchTarget.setAttribute("aria-busy", "false");
     this.patchTarget.replaceChildren();
     this.diffControlsTarget.hidden = true;
     this.versionsTarget.hidden = true;
@@ -485,6 +613,7 @@ export default class GitController extends WorkspaceComponent {
   renderPatch(data) {
     this.clearDiff();
     this.comparison = data;
+    this.patchTarget.classList.toggle("git-empty", data.before === undefined);
     if (data.before === undefined) {
       this.patchTarget.textContent = data.patch || "Нет различий для выбранного сравнения.";
 
@@ -492,16 +621,147 @@ export default class GitController extends WorkspaceComponent {
     }
 
     this.diffControlsTarget.hidden = false;
-    this.versionsTarget.hidden = this.isUnified;
-    this.diffView = new this.DiffView(this.patchTarget, data, this.isUnified);
-    this.layoutTarget.textContent = this.isUnified ? "Две колонки" : "Единый вид";
+    if (!this.hasLayoutPreference) {
+      this.isUnified = window.innerWidth <= MOBILE_WIDTH;
+    }
+
+    this.versionsTarget.hidden = false;
+    this.versionsTarget.dataset.layout = this.isUnified ? "unified" : "split";
+    this.diffView = new this.DiffView(this.patchTarget, data, {
+      isUnified: this.isUnified,
+      hasWrapping: this.hasWrapping,
+      onSelection: () => this.updateCounter(),
+    });
+    this.layoutTarget.value = this.isUnified ? "unified" : "split";
+    this.updateCounter();
   }
   /**
    * Toggle between aligned versions and an inline comparison without rereading disk.
    */
   toggleLayout() {
-    this.isUnified = !this.isUnified;
+    this.hasLayoutPreference = true;
+    this.isUnified = this.layoutTarget.value === "unified";
     this.renderPatch(this.comparison);
+  }
+  /**
+   * Switch the sidebar between changed files and commit history.
+   *
+   * @param {Event} event - Selected sidebar tab.
+   */
+  changeMode(event) {
+    this.mode = event.currentTarget.dataset.mode;
+    this.updateMode();
+    if (this.mode === "changes") {
+      this.selectInitialChange();
+
+      return;
+    }
+
+    this.selectHistory();
+  }
+  /**
+   * Restore a history comparison instead of leaving a working diff under the history tab.
+   */
+  selectHistory() {
+    if (this.filePath && this.workingVersionTarget.getAttribute(CURRENT_ATTRIBUTE) === "true") {
+      void this.showWorking();
+
+      return;
+    }
+
+    const selected =
+      this.commitsTarget.querySelector(CURRENT_ROW) || this.commitsTarget.querySelector("button");
+
+    if (selected) {
+      void this.compareCommitRow(selected);
+
+      return;
+    }
+
+    this.renderPatch({ patch: "В репозитории пока нет коммитов." });
+  }
+  /**
+   * Keep tabs and their panels consistent without mixing two navigation tasks.
+   */
+  updateMode() {
+    const isHistory = this.mode === "history";
+    this.changeSectionTarget.hidden = isHistory;
+    this.historySectionTarget.hidden = !isHistory;
+    this.changesTabTarget.setAttribute("aria-selected", String(!isHistory));
+    this.historyTabTarget.setAttribute("aria-selected", String(isHistory));
+    this.changesTabTarget.tabIndex = isHistory ? -1 : 0;
+    this.historyTabTarget.tabIndex = isHistory ? 0 : -1;
+  }
+  /**
+   * Name the exact sources compared in the two panes.
+   *
+   * @param {string} before - Left-side revision label.
+   * @param {string} after - Right-side revision label.
+   */
+  setVersions(before, after) {
+    this.beforeLabelTarget.textContent = before;
+    this.afterLabelTarget.textContent = after;
+  }
+  /**
+   * Report changed-block position and disable meaningless navigation in clean files.
+   */
+  updateCounter() {
+    if (!this.diffView) {
+      return;
+    }
+
+    const { current, total } = this.diffView.position;
+    this.counterTarget.textContent = total ? `${current} / ${total}` : "Нет изменений";
+    this.previousTarget.disabled = total === 0;
+    this.nextTarget.disabled = total === 0;
+  }
+  /**
+   * Make long text readable without horizontal scrolling.
+   */
+  toggleWrapping() {
+    this.hasWrapping = !this.hasWrapping;
+    this.wrappingTarget.setAttribute("aria-pressed", String(this.hasWrapping));
+    this.renderPatch(this.comparison);
+  }
+  /**
+   * Move through sidebar items with the keyboard.
+   *
+   * @param {KeyboardEvent} event - Navigation key from a file or commit list.
+   */
+  navigateList(event) {
+    navigateRows(event);
+  }
+  /**
+   * Choose a readable default when the viewport becomes narrow.
+   */
+  resizeDiff() {
+    if (!this.diffView || this.hasLayoutPreference) {
+      return;
+    }
+
+    const isUnified = window.innerWidth <= MOBILE_WIDTH;
+
+    if (this.isUnified === isUnified) {
+      return;
+    }
+
+    this.isUnified = isUnified;
+    this.renderPatch(this.comparison);
+  }
+  /**
+   * Switch sidebar tabs with the keyboard.
+   *
+   * @param {KeyboardEvent} event - Keyboard input from the tab bar.
+   */
+  changeTab(event) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+
+    event.preventDefault();
+    const tab = event.key === "ArrowRight" ? this.historyTabTarget : this.changesTabTarget;
+    tab.focus();
+    tab.click();
   }
   /**
    * Keep change-navigation shortcuts available throughout the open diff dialog.
@@ -521,11 +781,13 @@ export default class GitController extends WorkspaceComponent {
    */
   nextChange() {
     this.diffView?.navigate(false);
+    this.updateCounter();
   }
   /**
    * Move to the previous changed block, also available with Shift+F7.
    */
   previousChange() {
     this.diffView?.navigate(true);
+    this.updateCounter();
   }
 }

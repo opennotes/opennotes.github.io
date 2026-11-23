@@ -16,10 +16,10 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg%20width%3D%2226%22%20height%3D%2226%22%20viewBox%3D%220%200%2026%2026%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cstyle%3E%3Aroot%20%7B%20color%3A%20%23000%3B%20%7D%20%40media%20%28prefers-color-scheme%3A%20dark%29%20%7B%20%3Aroot%20%7B%20color%3A%20%23fff%3B%20%7D%20%7D%3C%2Fstyle%3E%0A%3Cpath%20d%3D%22M22.28%2012.9564C23.5935%2011.6429%2024.3314%209.86144%2024.3314%208.00389C24.3314%206.14634%2023.5935%204.36488%2022.28%203.05139C20.9665%201.73791%2019.185%201%2017.3275%201C15.47%201%2013.6885%201.73791%2012.375%203.05139L4.5%2010.9264V20.8431H14.4167L22.28%2012.9564Z%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M17.3333%208.00977L1%2024.3431%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M19.0832%2016.1763H9.1665%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3C%2Fsvg%3E"
     />
-    <script type="module" crossorigin src="./assets/editor-BCIAMU6B.js"></script>
+    <script type="module" crossorigin src="./assets/editor-DUdyyXDM.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/install-DzUjBZuO.js">
     <link rel="modulepreload" crossorigin href="./assets/preload-helper-UWy1vN1I.js">
-    <link rel="stylesheet" crossorigin href="./assets/editor-3VBxVAyc.css">
+    <link rel="stylesheet" crossorigin href="./assets/editor-CbvqkEj_.css">
   </head>
   <body>
     <div
@@ -612,11 +612,32 @@
         class="git-dialog"
         data-git-target="dialog"
         aria-labelledby="git-title"
-        data-action="cancel->git#disconnect keydown->git#diffKeydown"
+        data-action="cancel->git#disconnect keydown->git#diffKeydown resize@window->git#resizeDiff"
       >
         <header class="git-header">
           <h2 id="git-title">Git</h2>
-          <button type="button" class="btn btn-plain" data-action="git#close">Закрыть · Esc</button>
+          <div class="git-identity" data-git-target="controls" hidden>
+            <span class="git-root" data-git-target="repository"></span>
+            <span class="git-branch" data-git-target="branch"></span>
+          </div>
+          <button
+            type="button"
+            class="git-icon-button git-refresh"
+            data-action="git#refresh"
+            aria-label="Обновить"
+            title="Обновить"
+          >
+            ↻
+          </button>
+          <button
+            type="button"
+            class="git-icon-button"
+            data-action="git#close"
+            aria-label="Закрыть · Esc"
+            title="Закрыть · Esc"
+          >
+            ×
+          </button>
         </header>
         <button
           class="btn btn-plain"
@@ -627,80 +648,132 @@
         >
           Выбрать основной репозиторий
         </button>
-        <div class="git-controls" data-git-target="controls" hidden>
-          <span class="git-root" data-git-target="repository"></span>
-          <button class="btn btn-plain" type="button" data-action="git#refresh">Обновить</button>
-        </div>
         <p class="git-message" data-git-target="status" role="status"></p>
         <div class="git-layout" data-git-target="content" hidden>
-          <div class="git-navigation">
-            <details open data-git-target="changeSection">
-              <summary>Изменения</summary>
-              <div data-git-target="changes"></div>
-            </details>
-            <details open>
-              <summary data-git-target="fileHistoryTitle">История коммитов</summary>
-              <div data-git-target="commits"></div>
+          <aside class="git-navigation" aria-label="Навигация Git">
+            <div class="git-tabs" role="tablist" data-action="keydown->git#changeTab" aria-label="Раздел Git">
               <button
-                class="btn btn-plain"
                 type="button"
-                data-git-target="more"
-                data-action="git#older"
-                hidden
+                role="tab"
+                id="git-changes-tab"
+                aria-controls="git-changes-panel"
+                aria-selected="true"
+                data-git-target="changesTab"
+                data-mode="changes"
+                data-action="git#changeMode"
               >
-                Показать ещё
+                Изменения
               </button>
-            </details>
-          </div>
-          <section class="git-comparison" aria-label="Просмотр различий">
-            <h3 data-git-target="heading">Изменения в репозитории</h3>
-            <div class="git-diff-toolbar">
-              <select
-                data-git-target="fileSelect"
-                data-action="change->git#commitFile"
-                aria-label="Файл коммита"
-                hidden
-              ></select>
               <button
                 type="button"
-                class="btn btn-plain"
+                role="tab"
+                id="git-history-tab"
+                aria-controls="git-history-panel"
+                aria-selected="false"
+                data-git-target="historyTab"
+                data-mode="history"
+                data-action="git#changeMode"
+              >
+                История
+              </button>
+            </div>
+            <section
+              id="git-changes-panel"
+              class="git-panel git-change-list"
+              role="tabpanel"
+              aria-labelledby="git-changes-tab"
+              data-git-target="changeSection"
+            >
+              <div data-git-target="changes" data-action="keydown->git#navigateList"></div>
+            </section>
+            <section
+              id="git-history-panel"
+              class="git-panel git-history-panel"
+              role="tabpanel"
+              aria-labelledby="git-history-tab"
+              data-git-target="historySection"
+              hidden
+            >
+              <h3 class="git-panel-caption" data-git-target="fileHistoryTitle">История коммитов</h3>
+              <button
+                type="button"
+                class="git-working-version"
                 data-git-target="workingVersion"
                 data-action="git#showWorking"
                 hidden
               >
                 Рабочая версия
               </button>
-              <div data-git-target="diffControls" class="git-diff-actions" hidden>
-                <button
-                  type="button"
-                  class="btn btn-plain"
-                  data-action="git#previousChange"
-                  title="Предыдущее изменение · Shift+F7"
-                  aria-label="Предыдущее изменение"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-plain"
-                  data-action="git#nextChange"
-                  title="Следующее изменение · F7"
-                  aria-label="Следующее изменение"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-plain"
+              <div
+                class="git-history-list"
+                data-git-target="commits"
+                data-action="keydown->git#navigateList"
+              ></div>
+              <button class="git-more" type="button" data-git-target="more" data-action="git#older" hidden>
+                Показать ещё
+              </button>
+              <section
+                class="git-commit-files"
+                data-git-target="commitFiles"
+                aria-label="Файлы коммита"
+                hidden
+              >
+                <h3 class="git-panel-caption">Файлы коммита</h3>
+                <div data-git-target="commitFileList" data-action="keydown->git#navigateList"></div>
+              </section>
+            </section>
+          </aside>
+          <section class="git-comparison" aria-label="Просмотр различий">
+            <header class="git-diff-toolbar">
+              <h3 data-git-target="heading">Изменения в проекте</h3>
+              <div class="git-diff-actions" data-git-target="diffControls" hidden>
+                <div class="git-chunk-navigation">
+                  <button
+                    type="button"
+                    class="git-icon-button"
+                    data-git-target="previous"
+                    data-action="git#previousChange"
+                    title="Предыдущее изменение · Shift+F7"
+                    aria-label="Предыдущее изменение"
+                  >
+                    ↑
+                  </button>
+                  <span class="git-counter" data-git-target="counter" aria-live="polite"></span>
+                  <button
+                    type="button"
+                    class="git-icon-button"
+                    data-git-target="next"
+                    data-action="git#nextChange"
+                    title="Следующее изменение · F7"
+                    aria-label="Следующее изменение"
+                  >
+                    ↓
+                  </button>
+                </div>
+                <select
+                  class="git-view-select"
                   data-git-target="layout"
-                  data-action="git#toggleLayout"
+                  data-action="change->git#toggleLayout"
+                  aria-label="Вид diff"
                 >
-                  Единый вид
+                  <option value="split">Две колонки</option>
+                  <option value="unified">Единый вид</option>
+                </select>
+                <button
+                  type="button"
+                  class="git-icon-button"
+                  data-git-target="wrapping"
+                  data-action="git#toggleWrapping"
+                  aria-label="Перенос строк"
+                  aria-pressed="true"
+                  title="Перенос строк"
+                >
+                  ↵
                 </button>
               </div>
-            </div>
+            </header>
             <div class="git-version-labels" data-git-target="versions" hidden>
-              <span>Было</span><span>Стало</span>
+              <span data-git-target="beforeLabel"></span><span data-git-target="afterLabel"></span>
             </div>
             <div class="git-patch" tabindex="0" aria-label="Git diff" data-git-target="patch"></div>
           </section>

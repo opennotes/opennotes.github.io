@@ -45,8 +45,9 @@ test("Browser Git reads packed history, staged/working changes, deletions and li
   await dialog.locator('[data-area="untracked"][data-path="new note.md"]').click();
   await expect(patch).toContainText("new note");
   await expect(dialog.locator('[data-path="ignored.txt"]')).toHaveCount(0);
+  await dialog.getByRole("tab", { name: "История", exact: true }).click();
   await dialog.getByRole("button", { name: /Initial notes/ }).click();
-  await dialog.getByRole("combobox", { name: "Файл коммита" }).selectOption("note.md");
+  await dialog.locator('[data-git-target="commitFileList"] [data-path="note.md"]').click();
   await expect(patch).toContainText("before");
   await page.evaluate(async () => {
     const file = await globalThis.gitTestFolder.getFileHandle("note.md");
@@ -56,6 +57,7 @@ test("Browser Git reads packed history, staged/working changes, deletions and li
   });
   await dialog.getByRole("button", { name: "Обновить", exact: true }).click();
   await expect(dialog.locator('[data-git-target="status"]')).toBeEmpty();
+  await dialog.getByRole("tab", { name: "Изменения", exact: true }).click();
   await dialog.locator('[data-area="working"][data-path="note.md"]').click();
   await expect(patch).toContainText("updated on disk");
   await page.keyboard.press("Escape");
@@ -96,8 +98,9 @@ test("Linked worktrees request only the extra folder permission and read shared 
     await dialog.getByRole("button", { name: "Выбрать основной репозиторий" }).click();
     await expect(page.locator('[data-git-target="launch"]')).toHaveText("Git · feature");
     await expect(dialog.locator('[data-git-target="changes"]')).toContainText("чистая");
+    await dialog.getByRole("tab", { name: "История", exact: true }).click();
     await dialog.getByRole("button", { name: /Initial notes/ }).click();
-    await dialog.getByRole("combobox", { name: "Файл коммита" }).selectOption("note.md");
+    await dialog.locator('[data-git-target="commitFileList"] [data-path="note.md"]').click();
     await expect(dialog.locator(".git-patch")).toContainText("before");
   } finally {
     await removeFixture(linkedPath);
@@ -121,14 +124,15 @@ test("File toolbar opens its history and a read-only side-by-side diff", async (
   await expect(dialog.locator(".cm-lineNumbers")).toHaveCount(2);
   await expect(dialog.locator('[contenteditable="true"]')).toHaveCount(0);
   await expect(dialog.locator('[data-git-target="changeSection"]')).toBeHidden();
+  await dialog.getByRole("tab", { name: "История", exact: true }).click();
   await dialog.getByRole("button", { name: /Initial notes/ }).click();
   await expect(dialog.locator(".cm-merge-b .cm-content")).toContainText("before");
   await dialog.getByRole("button", { name: "Рабочая версия", exact: true }).click();
   await expect(dialog.locator(".cm-merge-b .cm-content")).toContainText("working");
-  await dialog.getByRole("button", { name: "Единый вид", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Вид diff" }).selectOption("unified");
   await expect(dialog.locator(".cm-editor")).toHaveCount(1);
   await expect(dialog.locator(".cm-deletedChunk")).toContainText("before");
-  await dialog.getByRole("button", { name: "Две колонки", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Вид diff" }).selectOption("split");
   await expect(dialog.locator(".cm-editor")).toHaveCount(2);
   await dialog.getByRole("button", { name: "Следующее изменение", exact: true }).click();
   await page.keyboard.press("Shift+F7");
@@ -137,4 +141,45 @@ test("File toolbar opens its history and a read-only side-by-side diff", async (
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(page.locator('[data-editor-target="editor"] .cm-content')).toContainText("working");
+});
+
+test("Git navigation keeps the selected revision explicit and adapts narrow screens", async ({
+  page,
+  browserName,
+}) => {
+  // Local folder grants require File System Access in Chromium.
+  test.skip(browserName !== "chromium", "Local folder grants require Chrome or Edge.");
+  await page.goto("/edit.html");
+  await openGitFolder(page, files);
+  await page.locator('[data-git-target="launch"]').click();
+  const dialog = page.getByRole("dialog", { name: "Git", exact: true });
+  await expect(dialog.locator(".cm-editor")).toHaveCount(2);
+  const changes = dialog.locator('[data-git-target="changes"]');
+  await expect(changes.locator('[aria-current="true"]')).toHaveCount(1);
+  const note = changes.locator('[data-area="working"][data-path="note.md"]');
+  await note.click();
+  await expect(dialog.locator('[data-git-target="afterLabel"]')).toHaveText("Рабочая копия");
+  await dialog.getByRole("button", { name: "Следующее изменение", exact: true }).click();
+  await expect(note).toHaveAttribute("aria-current", "true");
+  await note.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(changes.locator('[data-path="new note.md"]')).toHaveAttribute("aria-current", "true");
+  await page.keyboard.press("ArrowUp");
+  await expect(note).toHaveAttribute("aria-current", "true");
+  await dialog.getByRole("tab", { name: "Изменения", exact: true }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(dialog.getByRole("tab", { name: "История", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(dialog.locator('[data-git-target="commitFiles"]')).toBeVisible();
+  await dialog.locator('[data-git-target="commitFileList"] [data-path="note.md"]').click();
+  await expect(dialog.locator('[data-git-target="afterLabel"]')).toContainText("Коммит");
+  await dialog.getByRole("tab", { name: "История", exact: true }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(dialog.locator('[data-git-target="afterLabel"]')).toHaveText("Рабочая копия");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dialog.getByRole("combobox", { name: "Вид diff" })).toHaveValue("unified");
+  await expect(dialog.locator(".cm-editor")).toHaveCount(1);
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });

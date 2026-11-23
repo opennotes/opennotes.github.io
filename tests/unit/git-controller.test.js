@@ -55,9 +55,10 @@ it("opens the current folder, renders literal data and closes without touching t
   workspace.project.dirHandle = folder();
   await git.refresh();
   expect(git.launchTarget.textContent).toBe("Git · main");
-  expect(git.repositoryTarget.textContent).toBe("notes · main");
+  expect(git.repositoryTarget.textContent).toBe("notes");
+  expect(git.branchTarget.textContent).toBe("main");
   expect(git.changesTarget.querySelectorAll("button")).toHaveLength(4);
-  expect(git.changesTarget.textContent).toContain("old.md → renamed.md");
+  expect(git.changesTarget.textContent).toContain("renamed.md");
   expect(git.commitsTarget.textContent).toContain("<script>");
   expect(git.commitsTarget.querySelector("script")).toBeNull();
   git.close();
@@ -75,12 +76,13 @@ it("selects both file comparisons, commit diffs and the next history page", asyn
       : { path: "note.md", before: "before\n <img>", after: "after\n <img>" },
   );
   await git.selectChange({ currentTarget: { dataset: { path: "note.md", area: "staged" } } });
-  expect(git.headingTarget.textContent).toContain("HEAD → индекс");
+  expect(git.beforeLabelTarget.textContent).toContain("HEAD");
+  expect(git.afterLabelTarget.textContent).toContain("staged");
   expect(git.patchTarget.textContent).toContain("after");
   await git.selectChange({ currentTarget: { dataset: { path: "note.md", area: "working" } } });
-  expect(git.headingTarget.textContent).toContain("рабочая папка");
+  expect(git.afterLabelTarget.textContent).toBe("Рабочая копия");
   await git.selectCommit({ currentTarget: { dataset: { oid: COMMIT.oid } } });
-  expect(git.headingTarget.textContent).toContain(COMMIT.oid.slice(0, 8));
+  expect(git.afterLabelTarget.textContent).toContain(COMMIT.oid.slice(0, 8));
   expect(git.patchTarget.querySelector("img")).toBeNull();
   request.mockResolvedValue({ commits: [], more: false });
   await git.older();
@@ -289,9 +291,11 @@ it("opens history directly from the active file and compares its saved version",
   expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(2);
   git.nextChange();
   git.previousChange();
+  git.layoutTarget.value = "unified";
   git.toggleLayout();
   expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(1);
-  expect(git.versionsTarget.hidden).toBe(true);
+  expect(git.versionsTarget.hidden).toBe(false);
+  git.layoutTarget.value = "split";
   git.toggleLayout();
   expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(2);
   request.mockResolvedValue({ commits: [], more: false });
@@ -305,7 +309,7 @@ it("opens history directly from the active file and compares its saved version",
 it("handles empty commit file lists and closing while scoped history is loading", async () => {
   const git = await controller();
   git.renderCommit({ files: [] });
-  expect(git.fileSelectTarget.hidden).toBe(true);
+  expect(git.commitFilesTarget.hidden).toBe(true);
   workspace.project.dirHandle = folder();
   await git.refresh();
   git.filePath = "note.md";
@@ -338,4 +342,134 @@ it("handles F7 throughout the dialog without double-handling editor shortcuts", 
   expect(git.diffView.navigate).toHaveBeenLastCalledWith(false);
   git.diffKeydown({ ...event, shiftKey: true });
   expect(git.diffView.navigate).toHaveBeenLastCalledWith(true);
+});
+
+it("separates changes from history and keeps the displayed file selected after focus moves", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  await git.refresh();
+  request.mockImplementation(async (operation) =>
+    operation === "commit" ? { files: ["note.md"] } : { path: "note.md", before: "before", after: "after" },
+  );
+  const first = git.changesTarget.querySelector("button");
+  first.click();
+  await vi.waitFor(() => expect(git.diffView).not.toBeNull());
+  git.nextChange();
+  expect(first.getAttribute("aria-current")).toBe("true");
+  const key = (keyValue) => new KeyboardEvent("keydown", { key: keyValue, bubbles: true, cancelable: true });
+  first.dispatchEvent(key("ArrowDown"));
+  expect(git.changesTarget.querySelectorAll('[aria-current="true"]')).toHaveLength(1);
+  git.changesTabTarget.dispatchEvent(key("ArrowRight"));
+  expect(git.historyTabTarget.getAttribute("aria-selected")).toBe("true");
+  expect(git.changeSectionTarget.hidden).toBe(true);
+  expect(git.historySectionTarget.hidden).toBe(false);
+  git.historyTabTarget.dispatchEvent(key("ArrowLeft"));
+  expect(git.changesTabTarget.getAttribute("aria-selected")).toBe("true");
+  const unrelated = key("Enter");
+  git.changesTabTarget.dispatchEvent(unrelated);
+  expect(unrelated.defaultPrevented).toBe(false);
+  git.renderCommit({ files: ["note.md", "other.md"] });
+  const second = git.commitFileListTarget.querySelectorAll("button")[1];
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  second.click();
+  await vi.waitFor(() => expect(git.headingTarget.textContent).toBe("other.md"));
+  expect(second.getAttribute("aria-current")).toBe("true");
+});
+
+it("keeps version labels visible and adapts to narrow screens until a layout is explicitly chosen", async () => {
+  const git = await controller();
+  git.resizeDiff();
+  workspace.project.dirHandle = folder();
+  await git.refresh();
+  git.renderPatch({ path: "note.md", before: "before", after: "after" });
+  expect(git.counterTarget.textContent).toBe("1 / 1");
+  vi.stubGlobal("innerWidth", 390);
+  git.resizeDiff();
+  expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(1);
+  expect(git.versionsTarget.hidden).toBe(false);
+  git.resizeDiff();
+  vi.stubGlobal("innerWidth", 1280);
+  git.resizeDiff();
+  expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(2);
+  git.layoutTarget.value = "unified";
+  git.toggleLayout();
+  git.resizeDiff();
+  expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(1);
+  git.toggleWrapping();
+  expect(git.wrappingTarget.getAttribute("aria-pressed")).toBe("false");
+  git.toggleWrapping();
+  expect(git.wrappingTarget.getAttribute("aria-pressed")).toBe("true");
+  git.renderPatch({ path: "clean.md", before: "same", after: "same" });
+  expect(git.counterTarget.textContent).toBe("Нет изменений");
+  expect(git.previousTarget.disabled).toBe(true);
+  expect(git.nextTarget.disabled).toBe(true);
+  vi.stubGlobal("innerWidth", 1024);
+});
+
+it("chooses inline comparison by default on a narrow viewport", async () => {
+  vi.stubGlobal("innerWidth", 390);
+  const git = await controller();
+  expect(git.isUnified).toBe(true);
+  vi.stubGlobal("innerWidth", 1024);
+});
+
+it("opens the current file automatically and falls back to staged files in a staged-only list", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  workspace.project.currentPath = "note.md";
+  request.mockImplementation(async (operation) =>
+    operation === "diff" ? { path: "note.md", before: "before", after: "after" } : SNAPSHOT,
+  );
+  git.open();
+  await vi.waitFor(() => expect(git.diffView).not.toBeNull());
+  expect(git.changesTarget.querySelector('[aria-current="true"]').dataset.path).toBe("note.md");
+  expect(git.changesTarget.querySelector('[aria-current="true"]').dataset.area).toBe("working");
+  git.renderRepository({ ...SNAPSHOT, changes: [{ path: "added.md", staged: "A", working: " " }] });
+  await vi.waitFor(() => expect(git.headingTarget.textContent).toBe("added.md"));
+  git.renderRepository({ ...SNAPSHOT, changes: [] });
+  expect(git.diffView).toBeNull();
+});
+
+it("restores the selected historical comparison and handles an empty repository history", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  request.mockImplementation(async (operation) => {
+    if (operation === "commit") {
+      return { files: ["note.md"] };
+    }
+    if (operation === "commitDiff") {
+      return {
+        path: "note.md",
+        before: "old",
+        after: "committed",
+      };
+    }
+    return SNAPSHOT;
+  });
+  git.mode = "history";
+  git.dialogTarget.showModal();
+  await git.refresh();
+  await vi.waitFor(() => expect(git.diffView).not.toBeNull());
+  expect(git.afterLabelTarget.textContent).toContain("Коммит");
+  git.commitsTarget.replaceChildren();
+  git.selectHistory();
+  expect(git.patchTarget.textContent).toContain("пока нет коммитов");
+});
+
+it("restores the working version when returning to a file's history", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  workspace.project.currentPath = "note.md";
+  request.mockImplementation(async (operation) =>
+    operation === "diff" ? { path: "note.md", before: "before", after: "working" } : SNAPSHOT,
+  );
+  git.openFileHistory();
+  await vi.waitFor(() => expect(git.diffView).not.toBeNull());
+  git.changesTabTarget.click();
+  await vi.waitFor(() => expect(git.beforeLabelTarget.textContent).toContain("Индекс"));
+  git.historyTabTarget.click();
+  await vi.waitFor(() => expect(git.beforeLabelTarget.textContent).toContain("HEAD"));
+  expect(git.workingVersionTarget.getAttribute("aria-current")).toBe("true");
 });
