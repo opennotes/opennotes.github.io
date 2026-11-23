@@ -1,6 +1,7 @@
-import { Controller } from "@hotwired/stimulus";
+import { gitBranch, gitDirectories } from "../git/metadata.js";
+import { GitReader } from "../git.js";
 
-import { parseGitConnection, rememberGitConnection, requestGit, restoreGitConnection } from "../git.js";
+import WorkspaceComponent from "./workspace_component.js";
 
 const CHANGE_GROUPS = [
   [
@@ -22,7 +23,6 @@ const CHANGE_GROUPS = [
 
 const MAX_PATCH_LINES = 5000;
 const SHORT_OID_LENGTH = 8;
-const REQUEST_TIMEOUT = 30_000;
 
 /**
  * Create a text-only node for repository data, never interpreting file contents.
@@ -84,11 +84,10 @@ function patchGroups(lines) {
   return groups;
 }
 
-export default class GitController extends Controller {
+export default class GitController extends WorkspaceComponent {
   static targets = [
     "dialog",
-    "form",
-    "connection",
+    "mainFolder",
     "repository",
     "launch",
     "controls",
@@ -102,42 +101,48 @@ export default class GitController extends Controller {
   ];
 
   /**
-   * Initialize request versions once so canceled responses remain obsolete after reconnects.
+   * Keep canceled requests obsolete after reconnecting or changing folders.
    */
   initialize() {
     this.version = 0;
-    this.connection = null;
-    this.abort = null;
+    this.reader = null;
+    this.main = undefined;
   }
   /**
-   * Reconnect without reusing the version of a canceled response.
+   * Remove obsolete helper credentials left by the previous version.
    */
   connect() {
-    const link = restoreGitConnection();
+    try {
+      sessionStorage.removeItem("open-notes-git");
+    } catch {
+      // Git does not require tab storage.
+    }
 
-    if (!link) {
+    const url = new URL(location.href);
+    const fragment = new URLSearchParams(url.hash.slice(1));
+
+    if (!fragment.has("git")) {
       return;
     }
 
-    this.connectionTarget.value = link;
-    this.dialogTarget.showModal();
-    void this.connectGit();
+    fragment.delete("git");
+    url.hash = fragment.toString();
+    history.replaceState(null, "", url);
   }
   /**
-   * Cancel outstanding reads when this controller leaves the page.
+   * Cancel outstanding reads and release repository objects.
    */
   disconnect() {
     this.version++;
-    this.abort?.abort();
+    this.reader?.stop();
+    this.reader = null;
   }
   /**
-   * Open Git for the explicitly connected repository and refresh its disk state.
+   * Read the folder already opened in the editor without another installation.
    */
   open() {
     this.dialogTarget.showModal();
-    if (this.connection) {
-      void this.refresh();
-    }
+    void this.refresh();
   }
   /**
    * Close Git while preserving the currently edited document.
@@ -147,66 +152,97 @@ export default class GitController extends Controller {
     this.disconnect();
   }
   /**
-   * Connect only after parsing the helper's restricted loopback link.
-   *
-   * @param {Event} event - Optional form submission to prevent navigating.
+   * Discard another folder's data and show the new branch immediately.
    */
-  async connectGit(event) {
-    event?.preventDefault();
+  async projectChanged() {
+    this.disconnect();
+    this.main = undefined;
+    this.contentTarget.hidden = true;
+    this.controlsTarget.hidden = true;
+    this.launchTarget.textContent = "Git";
+    const version = this.version;
+
     try {
-      this.connection = parseGitConnection(this.connectionTarget.value.trim());
-      await this.refresh();
+      const definition = await gitDirectories(this.project.dirHandle);
+      const branch = await gitBranch(definition);
+
+      if (version === this.version) {
+        this.launchTarget.textContent = `Git · ${branch}`;
+      }
     } catch {
-      this.statusTarget.textContent = "Вставьте адрес подключения, выведенный помощником Open Notes Git.";
+      // The Git view explains a missing repository or extra worktree grant when opened.
+    }
+
+    if (this.dialogTarget.open && version === this.version) {
+      await this.refresh();
     }
   }
   /**
-   * Forget this tab's helper connection and remove its data from the view.
+   * Grant access to shared metadata for a linked Git worktree.
    */
-  forget() {
-    this.disconnect();
-    this.connection = null;
-    rememberGitConnection("");
-    this.connectionTarget.value = "";
-    this.formTarget.hidden = false;
-    this.controlsTarget.hidden = true;
-    this.contentTarget.hidden = true;
-    this.repositoryTarget.textContent = "";
-    this.launchTarget.textContent = "Git";
-    this.statusTarget.textContent = "Git отключён.";
-    this.changesTarget.replaceChildren();
-    this.commitsTarget.replaceChildren();
-    this.moreTarget.hidden = true;
-    this.renderPatch({ patch: "" });
+  async chooseMain() {
+    try {
+      this.main = await showDirectoryPicker({ mode: "read" });
+      await this.refresh();
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        this.statusTarget.textContent = error.message;
+      }
+    }
   }
   /**
-   * Read status and recent history afresh from the system Git.
+   * Reopen live handles and discard cached objects before refreshing disk changes.
    */
   async refresh() {
-    await this.load("/repository", (data) => this.renderRepository(data));
+    this.disconnect();
+    const version = this.version;
+    this.contentTarget.hidden = true;
+    this.controlsTarget.hidden = true;
+    this.mainFolderTarget.hidden = true;
+    this.statusTarget.textContent = "Читаем Git…";
+    try {
+      const definition = await gitDirectories(this.project.dirHandle, this.main);
+
+      if (version !== this.version) {
+        return;
+      }
+
+      this.reader = new GitReader();
+      await this.reader.request("initialize", definition);
+      if (version !== this.version) {
+        return;
+      }
+
+      await this.load(
+        [
+          "repository",
+        ],
+        (data) => this.renderRepository(data),
+      );
+    } catch (error) {
+      if (version !== this.version) {
+        return;
+      }
+
+      this.mainFolderTarget.hidden = error.code !== "WORKTREE";
+      this.statusTarget.textContent = error.message;
+    }
   }
   /**
-   * Ensure that a slower request cannot replace a more recent selection.
+   * Apply only the latest selection, even when earlier reads finish later.
    *
-   * @param {string} route - Fixed endpoint and encoded repository selection.
-   * @param {(data: object) => void} render - View update applied only to the current response.
+   * @param {Array} request - Fixed read operation and its selection arguments.
+   * @param {(data: object) => void} render - Render the current response.
    */
-  async load(route, render) {
-    this.abort?.abort();
-    this.abort = new AbortController();
+  async load(request, render) {
     const version = ++this.version;
     this.statusTarget.textContent = "Читаем Git…";
     try {
-      const signal = AbortSignal.any([
-        this.abort.signal,
-        AbortSignal.timeout(REQUEST_TIMEOUT),
-      ]);
-
-      const data = await requestGit(this.connection, route, signal);
+      const data = await this.reader.request(...request);
 
       if (version === this.version) {
         render(data);
-        this.statusTarget.textContent = "";
+        this.statusTarget.textContent = data.warning || "";
       }
     } catch (error) {
       if (version === this.version) {
@@ -215,20 +251,24 @@ export default class GitController extends Controller {
     }
   }
   /**
-   * Display the helper's actual repository path so a different folder is unambiguous.
+   * Display the currently opened folder, branch and independently loaded history.
    *
-   * @param {object} data - Repository path, branch, status and first history page.
+   * @param {object} data - Repository identity, status and first history page.
    */
   renderRepository(data) {
-    rememberGitConnection(this.connectionTarget.value.trim());
-    this.formTarget.hidden = true;
     this.controlsTarget.hidden = false;
     this.contentTarget.hidden = false;
     this.repositoryTarget.textContent = `${data.root} · ${data.branch}`;
     this.launchTarget.textContent = `Git · ${data.branch}`;
     this.launchTarget.title = data.root;
     this.changesTarget.replaceChildren();
-    this.renderChanges(data.changes);
+    if (data.changes) {
+      this.renderChanges(data.changes);
+      if (data.warning && data.changes.length === 0) {
+        this.changesTarget.textContent = "Нет изменений в доступных файлах.";
+      }
+    }
+
     this.commitsTarget.replaceChildren();
     this.renderHistory(data);
     this.headingTarget.textContent = `Ветка: ${data.branch}`;
@@ -302,10 +342,15 @@ export default class GitController extends Controller {
    */
   async selectChange(event) {
     const { path, area } = event.currentTarget.dataset;
-    const query = new URLSearchParams({ path, area });
     this.headingTarget.textContent = `${path} · ${area === "staged" ? "HEAD → индекс" : "индекс → рабочая папка"}`;
     this.patchTarget.replaceChildren();
-    await this.load(`/diff?${query}`, (data) => this.renderPatch(data));
+    await this.load(
+      [
+        "diff",
+        { path, area },
+      ],
+      (data) => this.renderPatch(data),
+    );
   }
   /**
    * Show the selected commit's patch relative to its first parent.
@@ -316,14 +361,26 @@ export default class GitController extends Controller {
     const oid = event.currentTarget.dataset.oid;
     this.headingTarget.textContent = `Коммит ${oid.slice(0, SHORT_OID_LENGTH)} · diff с первым родителем`;
     this.patchTarget.replaceChildren();
-    await this.load(`/diff?commit=${oid}`, (data) => this.renderPatch(data));
+    await this.load(
+      [
+        "commit",
+        oid,
+      ],
+      (data) => this.renderPatch(data),
+    );
   }
   /**
    * Retrieve older commits without loading the entire history into the page.
    */
   async older() {
     const skip = this.commitsTarget.querySelectorAll("button").length;
-    await this.load(`/history?skip=${skip}`, (data) => this.renderHistory(data));
+    await this.load(
+      [
+        "history",
+        skip,
+      ],
+      (data) => this.renderHistory(data),
+    );
   }
   /**
    * Color a literal unified diff and bound the number of DOM nodes it creates.
@@ -346,9 +403,7 @@ export default class GitController extends Controller {
     }
 
     if (lines.length > MAX_PATCH_LINES) {
-      fragment.append(
-        textNode("span", `\nПоказаны первые ${MAX_PATCH_LINES} строк. Полный diff доступен в терминале.`),
-      );
+      fragment.append(textNode("span", `\nПоказаны первые ${MAX_PATCH_LINES} строк.`));
     }
 
     this.patchTarget.append(fragment);

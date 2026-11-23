@@ -16,16 +16,17 @@
       type="image/svg+xml"
       href="data:image/svg+xml,%3Csvg%20width%3D%2226%22%20height%3D%2226%22%20viewBox%3D%220%200%2026%2026%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Cstyle%3E%3Aroot%20%7B%20color%3A%20%23000%3B%20%7D%20%40media%20%28prefers-color-scheme%3A%20dark%29%20%7B%20%3Aroot%20%7B%20color%3A%20%23fff%3B%20%7D%20%7D%3C%2Fstyle%3E%0A%3Cpath%20d%3D%22M22.28%2012.9564C23.5935%2011.6429%2024.3314%209.86144%2024.3314%208.00389C24.3314%206.14634%2023.5935%204.36488%2022.28%203.05139C20.9665%201.73791%2019.185%201%2017.3275%201C15.47%201%2013.6885%201.73791%2012.375%203.05139L4.5%2010.9264V20.8431H14.4167L22.28%2012.9564Z%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M17.3333%208.00977L1%2024.3431%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3Cpath%20d%3D%22M19.0832%2016.1763H9.1665%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke%3D%22currentColor%22%2F%3E%0A%3C%2Fsvg%3E"
     />
-    <script type="module" crossorigin src="./assets/editor-DWNCsM5f.js"></script>
+    <script type="module" crossorigin src="./assets/editor-C8nb3wKg.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/install-DzUjBZuO.js">
     <link rel="modulepreload" crossorigin href="./assets/preload-helper-UWy1vN1I.js">
-    <link rel="stylesheet" crossorigin href="./assets/editor-gtE9JFvz.css">
+    <link rel="stylesheet" crossorigin href="./assets/editor-wMtT-hxj.css">
   </head>
   <body>
     <div
       class="app"
       id="workspace"
       data-controller="workspace tree editor search git"
+      data-git-workspace-outlet="#workspace"
       data-workspace-tree-outlet="#workspace"
       data-workspace-editor-outlet="#workspace"
       data-workspace-search-outlet="#workspace"
@@ -45,7 +46,7 @@
       data-tree-drop-target-class="drop-target"
       data-tree-root-drop-target-class="root-drop-target"
       data-editor-preview-class="preview-mode"
-      data-action="tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions visibilitychange@document->editor#refreshFromDisk focus@window->editor#refreshFromDisk"
+      data-action="workspace:project-changed->git#projectChanged tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions visibilitychange@document->editor#refreshFromDisk focus@window->editor#refreshFromDisk"
       data-workspace-target="app"
     >
       <div class="banner" data-workspace-target="banner" role="alert">
@@ -598,40 +599,22 @@
           <h2 id="git-title">Git</h2>
           <button type="button" class="btn btn-plain" data-action="git#close">Закрыть · Esc</button>
         </header>
-        <form class="git-connect" data-git-target="form" data-action="submit->git#connectGit">
-          <h3>Подключить системный Git</h3>
-          <ol>
-            <li>
-              <a href="open-notes-git.mjs" download>Скачайте помощник</a>. Нужны установленные Node.js 22.13+
-              и Git.
-            </li>
-            <li>
-              В терминале из папки со скачанным файлом запустите:<br /><code
-                >node open-notes-git.mjs "/путь/к/репозиторию"</code
-              >
-            </li>
-            <li>Откройте ссылку из терминала или вставьте адрес подключения ниже.</li>
-          </ol>
-          <label
-            >Адрес подключения<input
-              class="dialog-input"
-              type="password"
-              autocomplete="off"
-              spellcheck="false"
-              data-git-target="connection"
-              placeholder="http://127.0.0.1:порт/#ключ"
-              required
-          /></label>
-          <button class="btn btn-filled" type="submit">Подключить</button>
-          <p>
-            Помощник читает один указанный репозиторий. Для остановки нажмите Ctrl+C в терминале. При запросе
-            браузера разрешите доступ к локальному компьютеру.
-          </p>
-        </form>
+        <p class="git-message">
+          Git читает открытую папку прямо в браузере. Ничего устанавливать не нужно. Просмотр не изменяет
+          репозиторий.
+        </p>
+        <button
+          class="btn btn-plain"
+          type="button"
+          data-git-target="mainFolder"
+          data-action="git#chooseMain"
+          hidden
+        >
+          Выбрать основной репозиторий
+        </button>
         <div class="git-controls" data-git-target="controls" hidden>
           <span class="git-root" data-git-target="repository"></span>
           <button class="btn btn-plain" type="button" data-action="git#refresh">Обновить</button>
-          <button class="btn btn-plain" type="button" data-action="git#forget">Отключить</button>
         </div>
         <p class="git-message" data-git-target="status" role="status"></p>
         <div class="git-layout" data-git-target="content" hidden>
@@ -656,7 +639,10 @@
           </div>
           <section class="git-comparison" aria-label="Просмотр различий">
             <h3 data-git-target="heading">Изменения в репозитории</h3>
-            <p>Git показывает сохранённые файлы на диске. Удалённые строки отмечены −, добавленные +.</p>
+            <p>
+              Git показывает сохранённое содержимое файлов. Права доступа, ссылки и подмодули не сравниваются.
+              Удалённые строки отмечены −, добавленные +.
+            </p>
             <pre class="git-patch" tabindex="0" aria-label="Git diff" data-git-target="patch"></pre>
           </section>
         </div>

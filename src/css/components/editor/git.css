@@ -47,47 +47,17 @@
   font-size: 18px;
 }
 
-.git-connect {
-  flex-shrink: 0;
-  max-height: 65%;
-  padding: 16px;
-  overflow: auto;
-}
-
-.git-connect ol {
-  padding-left: 24px;
-  margin: 12px 0;
-}
-
-.git-connect li + li {
-  margin-top: 8px;
-}
-
-.git-connect label {
-  display: block;
-  margin: 12px 0;
-}
-
-.git-connect a {
-  color: var(--accent);
-}
-
-.git-connect p,
 .git-comparison > p {
   margin-top: 8px;
   font-size: 12px;
   color: var(--label-secondary);
 }
 
-.git-connect code,
-.git-root {
-  overflow-wrap: anywhere;
-}
-
 .git-root {
   flex: 1;
   min-width: 0;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .git-message {

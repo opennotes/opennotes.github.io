@@ -16,23 +16,21 @@
     "lint": "npm run lint:js && npm run lint:css",
     "lint:js": "eslint . --max-warnings 0",
     "lint:css": "stylelint \"src/**/*.css\" --max-warnings 0",
-    "test": "npm run test:git && vitest run",
+    "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:performance": "playwright test --project performance",
     "test:dist": "npm run build && OPEN_NOTES_PREVIEW=1 playwright test",
     "audit": "npm audit --audit-level=high",
-    "check": "npm run format:check && npm run lint && npm run test:policies && npm run test:git && npm run coverage && npm run test:e2e && npm run test:dist",
+    "check": "npm run format:check && npm run lint && npm run test:policies && npm run coverage && npm run test:e2e && npm run test:dist",
     "audit:runtime": "npm audit --omit=dev --audit-level=high",
     "lint:fix": "npm run lint:js:fix && npm run lint:css:fix",
     "lint:js:fix": "eslint . --fix --max-warnings 0",
     "lint:css:fix": "stylelint \"src/**/*.css\" --fix --max-warnings 0",
     "test:policies": "node --test tests/policies/*.test.mjs",
     "test:compatibility": "npm run build && OPEN_NOTES_PREVIEW=1 playwright test --project dist-firefox --project dist-webkit",
-    "clean": "node --input-type=module -e 'import { rmSync } from \"node:fs\"; for (const path of [\"dist\", \"coverage\", \"playwright-report\", \"test-results\", \".playwright-cli\", \".vitest-attachments\", \"tests/__screenshots__\", \"node_modules/.vite\"]) rmSync(path, { recursive: true, force: true });'",
-    "git": "node src/public/open-notes-git.mjs",
-    "test:git": "node --test tests/git/*.test.mjs"
+    "clean": "node --input-type=module -e 'import { rmSync } from \"node:fs\"; for (const path of [\"dist\", \"coverage\", \"playwright-report\", \"test-results\", \".playwright-cli\", \".vitest-attachments\", \"tests/__screenshots__\", \"node_modules/.vite\"]) rmSync(path, { recursive: true, force: true });'"
   },
   "dependencies": {
     "@codemirror/commands": "6.7.0",
@@ -49,7 +47,10 @@
     "@codemirror/view": "6.34.1",
     "@hotwired/stimulus": "3.2.2",
     "@lezer/highlight": "1.2.1",
-    "ignore": "^7.0.5"
+    "buffer": "6.0.3",
+    "diff": "9.0.0",
+    "ignore": "^7.0.5",
+    "isomorphic-git": "1.44.18"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

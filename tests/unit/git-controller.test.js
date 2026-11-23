@@ -1,8 +1,15 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-import { mount } from "../support/workspace.js";
+import { directory, fileHandle, mount } from "../support/workspace.js";
 
-const LINK = `http://127.0.0.1:34567/#${"a".repeat(64)}`;
+const { request, stop } = vi.hoisted(() => ({ request: vi.fn(), stop: vi.fn() }));
+vi.mock("../../src/js/git.js", () => ({
+  GitReader: class {
+    request = request;
+    stop = stop;
+  },
+}));
+
 const COMMIT = {
   oid: "1".repeat(40),
   author: "Author",
@@ -10,17 +17,30 @@ const COMMIT = {
   subject: "Initial <script> literal",
 };
 const SNAPSHOT = {
-  root: "/work/notes",
+  root: "notes",
   branch: "main",
   more: true,
   commits: [COMMIT],
   changes: [
-    { path: "note.md", staged: "M", working: "M", oldPath: "" },
-    { path: "new.md", staged: "?", working: "?", oldPath: "" },
+    { path: "note.md", staged: "M", working: "M" },
+    { path: "new.md", staged: "?", working: " " },
     { path: "renamed.md", staged: "R", working: " ", oldPath: "old.md" },
   ],
 };
 let app;
+let workspace;
+
+function folder() {
+  return directory("notes", [directory(".git", [fileHandle("HEAD", "ref: refs/heads/main\n")])]);
+}
+
+async function controller() {
+  const mounted = await mount();
+  app = mounted.app;
+  workspace = mounted.c;
+  request.mockResolvedValue(SNAPSHOT);
+  return app.getControllerForElementAndIdentifier(document.querySelector(".app"), "git");
+}
 
 afterEach(() => {
   app?.stop();
@@ -28,57 +48,28 @@ afterEach(() => {
   history.replaceState(null, "", "/edit.html");
 });
 
-async function controller() {
-  const mounted = await mount();
-  app = mounted.app;
-  return app.getControllerForElementAndIdentifier(document.querySelector(".app"), "git");
-}
-
-function response(data) {
-  return {
-    ok: true,
-    json: async () => data,
-  };
-}
-
-it("opens without a helper and reports a malformed connection without a network call", async () => {
+it("opens the current folder, renders literal data and closes without touching the document", async () => {
   const git = await controller();
   git.open();
-  expect(git.dialogTarget.open).toBe(true);
-  git.connectionTarget.value = "wrong";
-  await git.connectGit();
-  expect(git.statusTarget.textContent).toContain("Вставьте адрес");
-  git.close();
-  expect(git.dialogTarget.open).toBe(false);
-});
-
-it("renders staged and unstaged groups, renamed paths and literal commit subjects", async () => {
-  const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(response(SNAPSHOT));
-  const git = await controller();
-  git.connectionTarget.value = LINK;
-  const event = { preventDefault: vi.fn() };
-  await git.connectGit(event);
-  expect(event.preventDefault).toHaveBeenCalledOnce();
+  await vi.waitFor(() => expect(git.statusTarget.textContent).toContain("Откройте папку"));
+  workspace.project.dirHandle = folder();
+  await git.refresh();
   expect(git.launchTarget.textContent).toBe("Git · main");
-  expect(git.repositoryTarget.textContent).toBe("/work/notes · main");
+  expect(git.repositoryTarget.textContent).toBe("notes · main");
   expect(git.changesTarget.querySelectorAll("button")).toHaveLength(4);
   expect(git.changesTarget.textContent).toContain("old.md → renamed.md");
   expect(git.commitsTarget.textContent).toContain("<script>");
   expect(git.commitsTarget.querySelector("script")).toBeNull();
-  git.open();
-  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-  git.forget();
-  expect(git.formTarget.hidden).toBe(false);
-  expect(git.moreTarget.hidden).toBe(true);
-  expect(git.launchTarget.textContent).toBe("Git");
+  git.close();
+  expect(git.dialogTarget.open).toBe(false);
+  expect(stop).toHaveBeenCalled();
 });
 
-it("reads file and commit diffs and fetches the next history page", async () => {
-  const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(response(SNAPSHOT));
+it("selects both file comparisons, commit diffs and the next history page", async () => {
   const git = await controller();
-  git.connectionTarget.value = LINK;
-  await git.connectGit();
-  fetch.mockResolvedValue(response({ patch: "@@ -1 +1 @@\n-before\n+after\n <img>" }));
+  workspace.project.dirHandle = folder();
+  await git.refresh();
+  request.mockResolvedValue({ patch: "@@ -1 +1 @@\n-before\n+after\n <img>" });
   await git.selectChange({ currentTarget: { dataset: { path: "note.md", area: "staged" } } });
   expect(git.headingTarget.textContent).toContain("HEAD → индекс");
   expect(git.patchTarget.querySelector(".git-added").textContent).toBe("+after\n");
@@ -87,86 +78,180 @@ it("reads file and commit diffs and fetches the next history page", async () => 
   await git.selectCommit({ currentTarget: { dataset: { oid: COMMIT.oid } } });
   expect(git.headingTarget.textContent).toContain(COMMIT.oid.slice(0, 8));
   expect(git.patchTarget.querySelector("img")).toBeNull();
-  fetch.mockResolvedValue(response({ commits: [], more: false }));
+  request.mockResolvedValue({ commits: [], more: false });
   await git.older();
-  expect(fetch.mock.calls.at(-1)[0].search).toBe("?skip=1");
-  expect(git.moreTarget.hidden).toBe(true);
+  expect(request).toHaveBeenLastCalledWith("history", 1);
 });
 
-it("handles clean and unborn repositories and bounds a large patch", async () => {
+it("distinguishes clean, unborn and unreadable changes and bounds diff rendering", async () => {
   const git = await controller();
-  git.connectionTarget.value = LINK;
   git.renderRepository({ ...SNAPSHOT, changes: [], commits: [], more: false });
   expect(git.changesTarget.textContent).toContain("чистая");
   expect(git.commitsTarget.textContent).toContain("нет коммитов");
+  git.renderRepository({ ...SNAPSHOT, changes: null });
+  expect(git.changesTarget.textContent).not.toContain("чистая");
   git.renderPatch({ patch: "line\n".repeat(5001) });
   expect(git.patchTarget.textContent).toContain("Показаны первые 5000");
-  git.renderPatch({ patch: "" });
+  git.renderPatch({});
   expect(git.patchTarget.textContent).toContain("Нет различий");
 });
 
-it("discards slow results after closing or selecting something newer", async () => {
+it("removes obsolete helper credentials without opening a connection", async () => {
+  sessionStorage.setItem("open-notes-git", "old-secret");
+  history.replaceState(null, "", "/edit.html#git=old-secret&other=keep");
+  const git = await controller();
+  expect(sessionStorage.getItem("open-notes-git")).toBeNull();
+  expect(location.hash).toBe("#other=keep");
+  expect(git.dialogTarget.open).toBe(false);
+  const storage = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+    throw new Error("disabled");
+  });
+  git.connect();
+  storage.mockRestore();
+});
+
+it("updates the branch on folder changes and clears data from the previous repository", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  await git.projectChanged();
+  expect(git.launchTarget.textContent).toBe("Git · main");
+  git.dialogTarget.showModal();
+  await git.projectChanged();
+  expect(git.contentTarget.hidden).toBe(false);
+  workspace.project.dirHandle = null;
+  await git.projectChanged();
+  expect(git.launchTarget.textContent).toBe("Git");
+  expect(git.contentTarget.hidden).toBe(true);
+});
+
+it("handles a worktree grant and picker cancel/errors", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = directory("linked", [
+    fileHandle(".git", "gitdir: /main/.git/worktrees/linked"),
+  ]);
+  await git.refresh();
+  expect(git.mainFolderTarget.hidden).toBe(false);
+  vi.stubGlobal("showDirectoryPicker", vi.fn().mockRejectedValue(new DOMException("canceled", "AbortError")));
+  await git.chooseMain();
+  expect(git.statusTarget.textContent).toContain("worktree");
+  showDirectoryPicker.mockRejectedValue(new Error("denied"));
+  await git.chooseMain();
+  expect(git.statusTarget.textContent).toBe("denied");
+  showDirectoryPicker.mockResolvedValue(folder());
+  workspace.project.dirHandle = folder();
+  await git.chooseMain();
+  expect(git.contentTarget.hidden).toBe(false);
+});
+
+it("discards obsolete requests, errors and initialization after closing", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  await git.refresh();
   let finish;
-  const fetch = vi.spyOn(globalThis, "fetch").mockImplementationOnce(
+  request.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         finish = resolve;
       }),
   );
-  const git = await controller();
-  git.connectionTarget.value = LINK;
-  const pending = git.connectGit();
-  git.close();
-  finish(response(SNAPSHOT));
+  const pending = git.load(["repository"], () => {
+    throw new Error("stale");
+  });
+  git.disconnect();
+  finish(SNAPSHOT);
   await pending;
-  expect(git.controlsTarget.hidden).toBe(true);
-  fetch.mockRejectedValueOnce(new Error("offline"));
-  await git.refresh();
-  expect(git.statusTarget.textContent).toContain("Нет связи");
-});
-
-it("does not surface errors from an obsolete request", async () => {
-  let failRequest;
-  vi.spyOn(globalThis, "fetch").mockImplementationOnce(
+  let fail;
+  request.mockImplementationOnce(
     () =>
       new Promise((resolve, reject) => {
-        failRequest = reject;
+        fail = reject;
       }),
   );
+  git.reader = { request, stop };
+  const failed = git.load(["repository"], vi.fn());
+  git.disconnect();
+  fail(new Error("old"));
+  await failed;
+  expect(git.statusTarget.textContent).not.toBe("old");
+});
+
+it("reports current processing errors and warnings", async () => {
   const git = await controller();
-  git.connectionTarget.value = LINK;
-  const pending = git.connectGit();
-  git.forget();
-  failRequest(new Error("aborted"));
+  workspace.project.dirHandle = folder();
+  await git.refresh();
+  request.mockRejectedValue(new Error("broken index"));
+  await git.load(["repository"], vi.fn());
+  expect(git.statusTarget.textContent).toBe("broken index");
+  await git.refresh();
+  expect(git.statusTarget.textContent).toBe("broken index");
+  request.mockResolvedValue({ ...SNAPSHOT, warning: "partial" });
+  await git.refresh();
+  expect(git.statusTarget.textContent).toBe("partial");
+});
+
+it("ignores branch reads and folder resolution after switching projects", async () => {
+  const git = await controller();
+  const root = folder();
+  workspace.project.dirHandle = root;
+  let finishHead;
+  const head = root.children.get(".git").children.get("HEAD");
+  const original = await head.getFile();
+  const read = vi.spyOn(head, "getFile").mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishHead = resolve;
+      }),
+  );
+  const branch = git.projectChanged();
+  await vi.waitFor(() => expect(read).toHaveBeenCalled());
+  git.disconnect();
+  finishHead(original);
+  await branch;
+  expect(git.launchTarget.textContent).toBe("Git");
+  let finishFolder;
+  const get = vi.spyOn(root, "getDirectoryHandle").mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishFolder = resolve;
+      }),
+  );
+  const pending = git.refresh();
+  git.disconnect();
+  finishFolder(root.children.get(".git"));
   await pending;
-  expect(git.statusTarget.textContent).toBe("Git отключён.");
+  expect(git.contentTarget.hidden).toBe(true);
+  get.mockRestore();
 });
 
-it("connects a helper link from the terminal and removes its fragment", async () => {
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(response(SNAPSHOT));
-  history.replaceState(null, "", `/edit.html#git=${encodeURIComponent(LINK)}`);
+it("ignores a canceled worker initialization and its delayed failure", async () => {
   const git = await controller();
-  await vi.waitFor(() => expect(git.launchTarget.textContent).toBe("Git · main"));
-  expect(git.dialogTarget.open).toBe(true);
-  expect(location.hash).toBe("");
-});
-
-it("does not reuse canceled request versions after a controller reconnects", async () => {
+  workspace.project.dirHandle = folder();
   let finish;
-  const fetch = vi.spyOn(globalThis, "fetch").mockImplementationOnce(
+  request.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         finish = resolve;
       }),
   );
-  const git = await controller();
-  git.connectionTarget.value = LINK;
-  const pending = git.connectGit();
+  const pending = git.refresh();
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
   git.disconnect();
-  git.connect();
-  fetch.mockResolvedValue(response({ ...SNAPSHOT, branch: "newer" }));
-  await git.refresh();
-  finish(response(SNAPSHOT));
+  finish({});
   await pending;
-  expect(git.launchTarget.textContent).toBe("Git · newer");
+  expect(git.contentTarget.hidden).toBe(true);
+  let fail;
+  request.mockImplementationOnce(
+    () =>
+      new Promise((resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  const failed = git.refresh();
+  await vi.waitFor(() => expect(fail).toBeTypeOf("function"));
+  git.disconnect();
+  fail(new Error("obsolete"));
+  await failed;
+  expect(git.statusTarget.textContent).not.toBe("obsolete");
+  git.renderRepository({ ...SNAPSHOT, changes: [], warning: "Excluded links" });
+  expect(git.changesTarget.textContent).toContain("доступных файлах");
 });

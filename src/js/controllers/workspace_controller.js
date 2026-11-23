@@ -337,6 +337,7 @@ export default class WorkspaceController extends Controller {
   setProjectName(name) {
     this.rootNameTarget.textContent = name;
     this.mobileTitleTarget.textContent = name;
+    this.dispatch("project-changed");
   }
 
   /**

@@ -18,8 +18,6 @@ const SOURCE_FILES = [
   "src/js/**/*.js",
 ];
 const NODE_FILES = [
-  "src/public/open-notes-git.mjs",
-  "tests/git/*.mjs",
   "scripts/**/*.mjs",
   "*.config.js",
 ];
