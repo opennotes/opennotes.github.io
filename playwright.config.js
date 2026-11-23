@@ -20,6 +20,7 @@ export default defineConfig({
           testMatch: [
             "dist.spec.js",
             "install.spec.js",
+            "git.spec.js",
           ],
         },
         {
@@ -27,6 +28,7 @@ export default defineConfig({
           testMatch: [
             "dist.spec.js",
             "install.spec.js",
+            "git.spec.js",
           ],
           use: { ...devices["Desktop Firefox"] },
         },
@@ -35,6 +37,7 @@ export default defineConfig({
           testMatch: [
             "dist.spec.js",
             "install.spec.js",
+            "git.spec.js",
           ],
           use: { ...devices["Desktop Safari"] },
         },
