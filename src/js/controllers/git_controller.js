@@ -325,9 +325,12 @@ export default class GitController extends WorkspaceComponent {
     }
 
     this.moreTarget.hidden = !data.more;
-    if (!this.commitsTarget.childElementCount) {
-      this.commitsTarget.append(textNode("p", "В репозитории пока нет коммитов."));
+    if (this.commitsTarget.childElementCount) {
+      return;
     }
+
+    const message = this.filePath ? "У этого файла пока нет коммитов." : "В репозитории пока нет коммитов.";
+    this.commitsTarget.append(textNode("p", message));
   }
   /**
    * Ask Git for changes between the index and worktree, or HEAD and index.

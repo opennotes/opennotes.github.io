@@ -92,6 +92,11 @@ it("distinguishes clean, unborn and unreadable changes and bounds diff rendering
   git.renderRepository({ ...SNAPSHOT, changes: [], commits: [], more: false });
   expect(git.changesTarget.textContent).toContain("чистая");
   expect(git.commitsTarget.textContent).toContain("нет коммитов");
+  git.filePath = "new.md";
+  git.commitsTarget.replaceChildren();
+  git.renderHistory({ commits: [], more: false });
+  expect(git.commitsTarget.textContent).toContain("У этого файла");
+  git.filePath = null;
   git.renderRepository({ ...SNAPSHOT, changes: null });
   expect(git.changesTarget.textContent).not.toContain("чистая");
   git.renderPatch({ patch: "Двоичный файл" });
