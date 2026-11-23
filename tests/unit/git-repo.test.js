@@ -74,7 +74,11 @@ it("compares staged, working, deleted and untracked bytes and the initial commit
     patch: expect.stringContaining("+new note"),
   });
   await expect(repo.commit(fixture.oid)).resolves.toMatchObject({
-    patch: expect.stringContaining("+before"),
+    files: expect.arrayContaining(["note.md", "deleted.md"]),
+  });
+  await expect(repo.commitDiff({ oid: fixture.oid, path: "note.md" })).resolves.toMatchObject({
+    before: "",
+    after: "before\n",
   });
 });
 
@@ -109,8 +113,11 @@ it("reads a later commit with unchanged files and deleted blobs", async () => {
   nativeGit(fixture.root, ["commit", "-m", "Second"]);
   const committedRoot = await handles();
   const committed = new Repo(await gitDirectories(committedRoot));
+  await expect(
+    committed.commitDiff({ oid: nativeGit(fixture.root, ["rev-parse", "HEAD"]), path: "deleted.md" }),
+  ).resolves.toMatchObject({ before: "gone\n", after: "" });
   await expect(committed.commit(nativeGit(fixture.root, ["rev-parse", "HEAD"]))).resolves.toMatchObject({
-    patch: expect.stringContaining("-gone"),
+    files: expect.arrayContaining(["deleted.md"]),
   });
   expect(await committed.history(1)).toMatchObject({ commits: [{ subject: "Initial notes" }] });
   const failure = vi.spyOn(repo.options.fs, "readFile").mockRejectedValue(new Error("denied"));
@@ -135,7 +142,7 @@ it("excludes symbolic links and submodules instead of reporting false deletions"
   const committedRoot = await handles();
   const committed = new Repo(await gitDirectories(committedRoot));
   await expect(committed.commit(nativeGit(fixture.root, ["rev-parse", "HEAD"]))).resolves.toMatchObject({
-    patch: expect.stringContaining("подмодуля не сравнивается"),
+    files: expect.arrayContaining(["module", "link"]),
   });
 });
 
@@ -158,8 +165,60 @@ it("walks changed nested directories and reads their stored blobs", async () => 
   const nestedRoot = await handles();
   const nested = new Repo(await gitDirectories(nestedRoot));
   await expect(nested.commit(nativeGit(fixture.root, ["rev-parse", "HEAD"]))).resolves.toMatchObject({
-    patch: expect.stringContaining("+deep contents"),
+    files: expect.arrayContaining(["nested/deep.md"]),
   });
   const blob = await nested.blob("nested/deep.md", "HEAD");
   expect(new TextDecoder().decode(blob)).toBe("deep contents\n");
+});
+
+it("honors nested gitignore patterns, negation and tracked-file semantics", async () => {
+  await writeFile(path.join(fixture.root, "forced.log"), "tracked\n");
+  await mkdir(path.join(fixture.root, "cache"));
+  await writeFile(path.join(fixture.root, "cache/tracked.md"), "tracked\n");
+  nativeGit(fixture.root, ["add", "-f", "forced.log", "cache/tracked.md"]);
+  nativeGit(fixture.root, ["commit", "-m", "Tracked log"]);
+  await writeFile(path.join(fixture.root, ".gitignore"), "ignored.txt\n*.log\n!keep.log\ncache/\n");
+  await writeFile(path.join(fixture.root, "forced.log"), "changed\n");
+  await writeFile(path.join(fixture.root, "cache/tracked.md"), "changed\n");
+  await writeFile(path.join(fixture.root, "hidden.log"), "hidden\n");
+  await writeFile(path.join(fixture.root, "keep.log"), "visible\n");
+  await mkdir(path.join(fixture.root, "scoped"));
+  await writeFile(path.join(fixture.root, "scoped/.gitignore"), "*.tmp\n!keep.tmp\n");
+  await writeFile(path.join(fixture.root, "scoped/hidden.tmp"), "hidden\n");
+  await writeFile(path.join(fixture.root, "scoped/keep.tmp"), "visible\n");
+  const scopedRoot = await handles();
+  const ignored = fileHandle("never.md");
+  ignored.getFile = vi.fn().mockRejectedValue(new Error("Ignored content must not be read"));
+  scopedRoot.children.get("cache").children.set("never.md", ignored);
+  const scoped = new Repo(await gitDirectories(scopedRoot));
+  const data = await scoped.repository();
+  const paths = data.changes.map((file) => file.path);
+  expect(paths).toContain("forced.log");
+  expect(paths).toContain("cache/tracked.md");
+  expect(paths).toContain("keep.log");
+  expect(paths).toContain("scoped/keep.tmp");
+  expect(paths).not.toContain("hidden.log");
+  expect(paths).not.toContain("scoped/hidden.tmp");
+  expect(ignored.getFile).not.toHaveBeenCalled();
+  expect(nativeGit(fixture.root, ["status", "--porcelain"])).not.toContain("hidden.log");
+  nativeGit(fixture.root, ["rm", "--cached", "-f", "forced.log"]);
+  const removed = new Repo(await gitDirectories(await handles()));
+  const removedData = await removed.repository();
+  expect(removedData.changes).toContainEqual({ path: "forced.log", staged: "D", working: " " });
+});
+
+it("filters file history to commits that touched that file and compares its saved working version", async () => {
+  const currentRoot = await handles();
+  const current = new Repo(await gitDirectories(currentRoot));
+  const history = await current.fileHistory({ path: "note.md", skip: 0 });
+  expect(history.commits.map((commit) => commit.subject)).toEqual(["Second", "Initial notes"]);
+  const next = await current.fileHistory({ path: "note.md", skip: 1 });
+  expect(next.commits.map((commit) => commit.subject)).toEqual(["Initial notes"]);
+  await expect(current.diff({ path: "note.md", area: "file" })).resolves.toMatchObject({
+    before: "working\n",
+    after: "unused\n",
+  });
+  await expect(current.fileHistory({ path: "untracked.md", skip: 0 })).resolves.toMatchObject({
+    commits: [],
+  });
 });

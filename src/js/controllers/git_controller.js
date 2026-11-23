@@ -21,7 +21,6 @@ const CHANGE_GROUPS = [
   ],
 ];
 
-const MAX_PATCH_LINES = 5000;
 const SHORT_OID_LENGTH = 8;
 
 /**
@@ -38,52 +37,6 @@ function textNode(tag, text) {
   return node;
 }
 
-/**
- * Classify unified diff lines without interpreting their contents.
- *
- * @param {string} line - One literal Git patch line.
- * @returns {string} Decorative class for an addition, removal or hunk.
- */
-function patchClass(line) {
-  if (line.startsWith("+")) {
-    return "git-added";
-  }
-
-  if (line.startsWith("-")) {
-    return "git-removed";
-  }
-
-  if (line.startsWith("@@")) {
-    return "git-hunk";
-  }
-
-  return "";
-}
-
-/**
- * Group neighboring lines to keep large patches small in the DOM.
- *
- * @param {Array<string>} lines - Bounded literal patch lines.
- * @returns {Array<object>} Contiguous runs sharing one diff decoration.
- */
-function patchGroups(lines) {
-  const groups = [];
-
-  for (const line of lines) {
-    const className = patchClass(line);
-    const previous = groups.at(-1);
-
-    if (previous?.className === className) {
-      previous.text += `${line}\n`;
-      continue;
-    }
-
-    groups.push({ className, text: `${line}\n` });
-  }
-
-  return groups;
-}
-
 export default class GitController extends WorkspaceComponent {
   static targets = [
     "dialog",
@@ -98,6 +51,13 @@ export default class GitController extends WorkspaceComponent {
     "patch",
     "heading",
     "content",
+    "fileHistoryTitle",
+    "changeSection",
+    "fileSelect",
+    "diffControls",
+    "layout",
+    "versions",
+    "workingVersion",
   ];
 
   /**
@@ -107,6 +67,10 @@ export default class GitController extends WorkspaceComponent {
     this.version = 0;
     this.reader = null;
     this.main = undefined;
+    this.filePath = null;
+    this.diffView = null;
+    this.isUnified = false;
+    this.DiffView = null;
   }
   /**
    * Remove obsolete helper credentials left by the previous version.
@@ -136,11 +100,13 @@ export default class GitController extends WorkspaceComponent {
     this.version++;
     this.reader?.stop();
     this.reader = null;
+    this.clearDiff();
   }
   /**
    * Read the folder already opened in the editor without another installation.
    */
   open() {
+    this.filePath = null;
     this.dialogTarget.showModal();
     void this.refresh();
   }
@@ -157,6 +123,7 @@ export default class GitController extends WorkspaceComponent {
   async projectChanged() {
     this.disconnect();
     this.main = undefined;
+    this.filePath = null;
     this.contentTarget.hidden = true;
     this.controlsTarget.hidden = true;
     this.launchTarget.textContent = "Git";
@@ -197,7 +164,6 @@ export default class GitController extends WorkspaceComponent {
     this.disconnect();
     const version = this.version;
     this.contentTarget.hidden = true;
-    this.controlsTarget.hidden = true;
     this.mainFolderTarget.hidden = true;
     this.statusTarget.textContent = "Читаем Git…";
     try {
@@ -207,8 +173,7 @@ export default class GitController extends WorkspaceComponent {
         return;
       }
 
-      this.reader = new GitReader();
-      await this.reader.request("initialize", definition);
+      await this.initializeReader(definition);
       if (version !== this.version) {
         return;
       }
@@ -219,6 +184,9 @@ export default class GitController extends WorkspaceComponent {
         ],
         (data) => this.renderRepository(data),
       );
+      if (this.filePath && this.reader && this.dialogTarget.open) {
+        await this.loadFileHistory();
+      }
     } catch (error) {
       if (version !== this.version) {
         return;
@@ -227,6 +195,23 @@ export default class GitController extends WorkspaceComponent {
       this.mainFolderTarget.hidden = error.code !== "WORKTREE";
       this.statusTarget.textContent = error.message;
     }
+  }
+  /**
+   * Load the comparison UI and Git worker only when opening an authorized repository.
+   *
+   * @param {object} definition - Granted repository directory handles.
+   */
+  async initializeReader(definition) {
+    this.reader = new GitReader();
+
+    const [
+      module,
+    ] = await Promise.all([
+      import("../git/diff-view.js"),
+      this.reader.request("initialize", definition),
+    ]);
+
+    this.DiffView = module.DiffView;
   }
   /**
    * Apply only the latest selection, even when earlier reads finish later.
@@ -270,9 +255,18 @@ export default class GitController extends WorkspaceComponent {
     }
 
     this.commitsTarget.replaceChildren();
-    this.renderHistory(data);
+    this.fileSelectTarget.hidden = true;
+    this.changeSectionTarget.hidden = Boolean(this.filePath);
+    this.workingVersionTarget.hidden = !this.filePath;
+    this.fileHistoryTitleTarget.textContent = this.filePath
+      ? `История · ${this.filePath}`
+      : "История коммитов";
+    if (!this.filePath) {
+      this.renderHistory(data);
+    }
+
     this.headingTarget.textContent = `Ветка: ${data.branch}`;
-    this.renderPatch({ patch: "Выберите файл или коммит, чтобы посмотреть diff." });
+    this.renderPatch({ patch: "Выберите файл для сравнения." });
   }
   /**
    * Keep index and worktree changes separate, including both versions of one file.
@@ -343,7 +337,8 @@ export default class GitController extends WorkspaceComponent {
   async selectChange(event) {
     const { path, area } = event.currentTarget.dataset;
     this.headingTarget.textContent = `${path} · ${area === "staged" ? "HEAD → индекс" : "индекс → рабочая папка"}`;
-    this.patchTarget.replaceChildren();
+    this.clearDiff();
+    this.fileSelectTarget.hidden = true;
     await this.load(
       [
         "diff",
@@ -359,12 +354,56 @@ export default class GitController extends WorkspaceComponent {
    */
   async selectCommit(event) {
     const oid = event.currentTarget.dataset.oid;
-    this.headingTarget.textContent = `Коммит ${oid.slice(0, SHORT_OID_LENGTH)} · diff с первым родителем`;
-    this.patchTarget.replaceChildren();
+    this.commitOid = oid;
+    this.headingTarget.textContent = `Коммит ${oid.slice(0, SHORT_OID_LENGTH)}`;
+    this.clearDiff();
+    if (this.filePath) {
+      await this.load(
+        [
+          "commitDiff",
+          { oid, path: this.filePath },
+        ],
+        (data) => this.renderPatch(data),
+      );
+
+      return;
+    }
+
     await this.load(
       [
         "commit",
         oid,
+      ],
+      (data) => this.renderCommit(data),
+    );
+  }
+  /**
+   * List commit files separately so selecting one reads only its comparison.
+   *
+   * @param {object} data - Literal paths changed in this commit.
+   */
+  renderCommit(data) {
+    this.fileSelectTarget.replaceChildren();
+    for (const path of data.files) {
+      const option = textNode("option", path);
+      option.value = path;
+      this.fileSelectTarget.append(option);
+    }
+
+    this.fileSelectTarget.hidden = data.files.length === 0;
+    if (data.files.length > 0) {
+      void this.commitFile();
+    }
+  }
+  /**
+   * Compare the selected commit file with its first-parent version.
+   */
+  async commitFile() {
+    const path = this.fileSelectTarget.value;
+    await this.load(
+      [
+        "commitDiff",
+        { oid: this.commitOid, path },
       ],
       (data) => this.renderPatch(data),
     );
@@ -375,37 +414,115 @@ export default class GitController extends WorkspaceComponent {
   async older() {
     const skip = this.commitsTarget.querySelectorAll("button").length;
     await this.load(
-      [
-        "history",
-        skip,
-      ],
+      this.filePath
+        ? [
+            "fileHistory",
+            { path: this.filePath, skip },
+          ]
+        : [
+            "history",
+            skip,
+          ],
       (data) => this.renderHistory(data),
     );
   }
   /**
-   * Color a literal unified diff and bound the number of DOM nodes it creates.
+   * Open the active file's own history directly from its toolbar.
+   */
+  openFileHistory() {
+    this.filePath = this.project.currentPath;
+    this.dialogTarget.showModal();
+    void this.refresh();
+  }
+  /**
+   * Read file-specific history and its current changes on initial opening.
+   */
+  async loadFileHistory() {
+    const reader = this.reader;
+    this.commitsTarget.replaceChildren();
+    await this.load(
+      [
+        "fileHistory",
+        { path: this.filePath, skip: 0 },
+      ],
+      (data) => this.renderHistory(data),
+    );
+    if (reader === this.reader && this.dialogTarget.open) {
+      await this.showWorking();
+    }
+  }
+  /**
+   * Compare the active file's saved contents with HEAD, including staged changes.
+   */
+  async showWorking() {
+    this.headingTarget.textContent = `${this.filePath} · HEAD → рабочая версия`;
+    await this.load(
+      [
+        "diff",
+        { path: this.filePath, area: "file" },
+      ],
+      (data) => this.renderPatch(data),
+    );
+  }
+  /**
+   * Dispose the previous comparison before changing selection or closing.
+   */
+  clearDiff() {
+    this.diffView?.destroy();
+    this.diffView = null;
+    this.patchTarget.replaceChildren();
+    this.diffControlsTarget.hidden = true;
+    this.versionsTarget.hidden = true;
+  }
+  /**
+   * Display aligned read-only versions, or a specific binary/size/error notice.
    *
-   * @param {object} data - Native Git patch, including binary-file messages.
+   * @param {object} data - File versions and their comparison notice.
    */
   renderPatch(data) {
-    this.patchTarget.replaceChildren();
-    const lines = (data.patch || "Нет различий для выбранного сравнения.").split("\n");
-    const fragment = document.createDocumentFragment();
+    this.clearDiff();
+    this.comparison = data;
+    if (data.before === undefined) {
+      this.patchTarget.textContent = data.patch || "Нет различий для выбранного сравнения.";
 
-    const groups = patchGroups(lines.slice(0, MAX_PATCH_LINES));
-
-    for (const group of groups) {
-      const span = textNode("span", group.text);
-
-      span.className = group.className;
-
-      fragment.append(span);
+      return;
     }
 
-    if (lines.length > MAX_PATCH_LINES) {
-      fragment.append(textNode("span", `\nПоказаны первые ${MAX_PATCH_LINES} строк.`));
+    this.diffControlsTarget.hidden = false;
+    this.versionsTarget.hidden = this.isUnified;
+    this.diffView = new this.DiffView(this.patchTarget, data, this.isUnified);
+    this.layoutTarget.textContent = this.isUnified ? "Две колонки" : "Единый вид";
+  }
+  /**
+   * Toggle between aligned versions and an inline comparison without rereading disk.
+   */
+  toggleLayout() {
+    this.isUnified = !this.isUnified;
+    this.renderPatch(this.comparison);
+  }
+  /**
+   * Keep change-navigation shortcuts available throughout the open diff dialog.
+   *
+   * @param {KeyboardEvent} event - Keyboard input from any dialog control.
+   */
+  diffKeydown(event) {
+    if (event.key !== "F7" || event.defaultPrevented || !this.diffView) {
+      return;
     }
 
-    this.patchTarget.append(fragment);
+    event.preventDefault();
+    this.diffView.navigate(event.shiftKey);
+  }
+  /**
+   * Move to the next changed block, also available with F7.
+   */
+  nextChange() {
+    this.diffView?.navigate(false);
+  }
+  /**
+   * Move to the previous changed block, also available with Shift+F7.
+   */
+  previousChange() {
+    this.diffView?.navigate(true);
   }
 }

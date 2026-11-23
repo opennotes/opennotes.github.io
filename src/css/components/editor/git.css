@@ -22,8 +22,8 @@
 }
 
 .git-dialog {
-  width: min(1120px, calc(100vw - 32px));
-  height: min(800px, calc(100dvh - 32px));
+  width: calc(100vw - 32px);
+  height: calc(100dvh - 32px);
 }
 
 .git-dialog[open] {
@@ -47,12 +47,6 @@
   font-size: 18px;
 }
 
-.git-comparison > p {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--label-secondary);
-}
-
 .git-root {
   flex: 1;
   min-width: 0;
@@ -74,7 +68,7 @@
 .git-layout {
   display: grid;
   flex: 1;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -120,7 +114,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  padding: 16px;
+  padding: 12px;
 }
 
 .git-comparison h3 {
@@ -137,25 +131,6 @@
   tab-size: 4;
 }
 
-.git-patch span {
-  display: block;
-  width: max-content;
-  min-width: 100%;
-  min-height: 1.6em;
-}
-
-.git-added {
-  background: light-dark(#e4f5e9, #163524);
-}
-
-.git-removed {
-  background: light-dark(#fce8e6, #482323);
-}
-
-.git-hunk {
-  color: var(--accent);
-}
-
 @media (width <= 768px) {
   .git-layout {
     grid-template-rows: minmax(100px, 35%) minmax(0, 1fr);
@@ -166,4 +141,68 @@
     border-right: 0;
     border-bottom: 1px solid var(--separator);
   }
+}
+
+.git-diff-toolbar,
+.git-diff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.git-diff-toolbar {
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.git-diff-toolbar select {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  color: var(--label-primary);
+  background: var(--bg-fill-hover);
+  border: 1px solid var(--separator);
+  border-radius: 6px;
+}
+
+.git-version-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--label-secondary);
+  border-block: 1px solid var(--separator);
+}
+
+.git-patch .cm-mergeView,
+.git-patch > .cm-editor {
+  height: 100%;
+}
+
+.git-patch .cm-editor {
+  min-width: 0;
+  color: var(--label-primary);
+  background: transparent;
+}
+
+.git-patch .cm-scroller {
+  overflow: auto;
+  font: 12px/1.6 var(--font-mono);
+}
+
+.git-patch .cm-gutters {
+  color: var(--label-secondary);
+  background: transparent;
+  border-color: var(--separator);
+}
+
+.git-patch .cm-changedLine {
+  background: light-dark(#e4f5e9, #163524);
+}
+
+.git-patch .cm-merge-a .cm-changedLine,
+.git-patch .cm-deletedChunk {
+  background: light-dark(#fce8e6, #482323);
 }

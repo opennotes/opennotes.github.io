@@ -21,6 +21,7 @@ export class Repo {
    */
   constructor(definition) {
     this.definition = definition;
+    this.tracked = new Set();
     this.options = { fs: new GitFileSystem(definition), dir: "/repo", cache: {} };
   }
   /**
@@ -43,11 +44,21 @@ export class Repo {
    * Read one bounded history page from the current HEAD.
    *
    * @param {number} skip - Number of already displayed commits.
+   * @param {string|undefined} path - Optional exact file path for scoped history.
    * @returns {Promise<object>} Commit summaries and continuation state.
    */
-  async history(skip = 0) {
+  async history(skip = 0, path) {
     const head = await this.head();
-    const entries = head ? await git.log({ ...this.options, ref: head, depth: skip + PAGE_SIZE + 1 }) : [];
+
+    const entries = head
+      ? await git.log({
+          ...this.options,
+          ref: head,
+          depth: skip + PAGE_SIZE + 1,
+          filepath: path,
+          force: true,
+        })
+      : [];
 
     const commits = entries.slice(skip, skip + PAGE_SIZE).map(({ oid, commit }) => ({
       oid,
@@ -72,6 +83,7 @@ export class Repo {
 
     try {
       const excluded = await this.excluded();
+      this.options.fs.shouldIgnore = (path, kind) => this.shouldIgnore(path, kind);
 
       const rows = await git.statusMatrix({
         ...this.options,
@@ -107,6 +119,7 @@ export class Repo {
    * @returns {Promise<Array<string>>} Paths excluded from working comparisons.
    */
   async excluded() {
+    this.tracked.clear();
     const head = await this.head();
 
     const entries = await git.walk({
@@ -116,6 +129,10 @@ export class Repo {
         git.STAGE(),
       ],
       map: async (path, items) => {
+        if (items[1]) {
+          this.tracked.add(path);
+        }
+
         const modes = await Promise.all(items.map((entry) => entry?.mode()));
 
         return modes.some((mode) => mode >= SYMLINK_MODE) ? path : undefined;
@@ -123,6 +140,20 @@ export class Repo {
     });
 
     return entries.filter(Boolean);
+  }
+  /**
+   * Prune ignored untracked folders before reading their children or file metadata.
+   *
+   * @param {string} path - Repository-relative entry.
+   * @param {string} kind - Native file or directory kind.
+   * @returns {Promise<boolean>} Whether traversal should exclude this untracked entry.
+   */
+  async shouldIgnore(path, kind) {
+    if (this.tracked.has(path)) {
+      return false;
+    }
+
+    return await git.isIgnored({ ...this.options, filepath: path + (kind === "directory" ? "/" : "") });
   }
   /**
    * Read the exact blob stored in a commit or index without changing the index.
@@ -190,64 +221,74 @@ export class Repo {
     const { path, area } = selection;
     const isStaged = area === "staged";
     const head = await this.head();
-    const before = await this.blob(path, isStaged ? head : "INDEX");
+    const isHead = isStaged || area === "file";
+    const before = await this.blob(path, isHead ? head : "INDEX");
     const after = isStaged ? await this.blob(path, "INDEX") : await this.working(path);
     const autocrlf = await git.getConfig({ ...this.options, path: "core.autocrlf" });
 
-    return { patch: comparison({ path, before, after, autocrlf }) };
+    return comparison({ path, before, after, autocrlf });
   }
   /**
-   * Compare a commit with its first parent, including the initial commit.
+   * List only commits that changed the selected file.
+   *
+   * @param {object} selection - File path and pagination offset.
+   * @returns {Promise<object>} File-specific history page.
+   */
+  fileHistory(selection) {
+    return this.history(selection.skip, selection.path);
+  }
+  /**
+   * List changed files without loading every blob in a commit.
    *
    * @param {string} oid - Selected immutable commit identifier.
-   * @returns {Promise<object>} Combined patches for all changed blobs.
+   * @returns {Promise<object>} Literal paths changed from the first parent.
    */
   async commit(oid) {
     const { commit } = await git.readCommit({ ...this.options, oid });
     const parent = commit.parent[0] || EMPTY_TREE;
 
-    const patches = await git.walk({
+    const files = await git.walk({
       ...this.options,
       trees: [
         git.TREE({ ref: parent }),
         git.TREE({ ref: oid }),
       ],
-      map: (
+      map: async (
         path,
         [
           before,
           after,
         ],
-      ) => this.commitFile(path, { before, after }),
+      ) => {
+        if (path === "." || (await before?.oid()) === (await after?.oid())) {
+          return;
+        }
+
+        const type = (await after?.type()) || (await before?.type());
+
+        if (type === "tree") {
+          return;
+        }
+
+        return path;
+      },
     });
 
-    return { patch: patches.filter(Boolean).join("\n") };
+    return { files: files.filter(Boolean) };
   }
   /**
-   * Skip equal objects and directories while comparing the selected commit.
+   * Load just the file selected in a commit, keeping large commits responsive.
    *
-   * @param {string} path - Repository-relative tree entry.
-   * @param {object} entries - Optional before and after walker entries.
-   * @returns {Promise<string|undefined>} Literal unified patch for one changed blob.
+   * @param {object} selection - Commit and repository-relative file path.
+   * @returns {Promise<object>} Before and after text for the selected file.
    */
-  async commitFile(path, entries) {
-    const { before, after } = entries;
+  async commitDiff(selection) {
+    const { oid, path } = selection;
+    const { commit } = await git.readCommit({ ...this.options, oid });
+    const before = await this.blob(path, commit.parent[0]);
+    const after = await this.blob(path, oid);
 
-    if (path === "." || (await before?.oid()) === (await after?.oid())) {
-      return;
-    }
-
-    const type = (await after?.type()) || (await before?.type());
-
-    if (type === "tree") {
-      return;
-    }
-
-    if (type !== "blob") {
-      return `${path}: содержимое подмодуля не сравнивается.\n`;
-    }
-
-    return comparison({ path, before: await before?.content(), after: await after?.content() });
+    return comparison({ path, before, after });
   }
 }
 

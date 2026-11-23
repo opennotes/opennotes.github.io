@@ -93,6 +93,7 @@ async function descend(root, parts) {
  * Present native handles as the read-only filesystem required by isomorphic-git.
  */
 export class GitFileSystem {
+  shouldIgnore;
   /**
    * Mount the working folder and the private/shared metadata handles.
    *
@@ -181,8 +182,15 @@ export class GitFileSystem {
     }
 
     const names = [];
+    const isMetadata = path === "/repo/.git" || path.startsWith("/repo/.git/");
 
     for await (const entry of handle.values()) {
+      const relative = `${path.slice("/repo/".length)}/${entry.name}`.replace(/^\//, "");
+
+      if (this.shouldIgnore && !isMetadata && (await this.shouldIgnore(relative, entry.kind))) {
+        continue;
+      }
+
       names.push(entry.name);
     }
 

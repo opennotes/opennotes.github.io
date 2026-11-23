@@ -402,6 +402,25 @@
               aria-label="Показать в дереве"
               title="Показать в дереве"
             ></button>
+            <button
+              type="button"
+              class="icon-btn"
+              data-action="git#openFileHistory"
+              aria-label="История файла"
+              title="История файла"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.75"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2" />
+              </svg>
+            </button>
             <span class="cursor-position" data-editor-target="cursorPosition" hidden></span>
             <button
               type="button"
@@ -591,16 +610,12 @@
         class="git-dialog"
         data-git-target="dialog"
         aria-labelledby="git-title"
-        data-action="cancel->git#disconnect"
+        data-action="cancel->git#disconnect keydown->git#diffKeydown"
       >
         <header class="git-header">
           <h2 id="git-title">Git</h2>
           <button type="button" class="btn btn-plain" data-action="git#close">Закрыть · Esc</button>
         </header>
-        <p class="git-message">
-          Git читает открытую папку прямо в браузере. Ничего устанавливать не нужно. Просмотр не изменяет
-          репозиторий.
-        </p>
         <button
           class="btn btn-plain"
           type="button"
@@ -617,12 +632,12 @@
         <p class="git-message" data-git-target="status" role="status"></p>
         <div class="git-layout" data-git-target="content" hidden>
           <div class="git-navigation">
-            <details open>
+            <details open data-git-target="changeSection">
               <summary>Изменения</summary>
               <div data-git-target="changes"></div>
             </details>
             <details open>
-              <summary>История коммитов</summary>
+              <summary data-git-target="fileHistoryTitle">История коммитов</summary>
               <div data-git-target="commits"></div>
               <button
                 class="btn btn-plain"
@@ -637,11 +652,55 @@
           </div>
           <section class="git-comparison" aria-label="Просмотр различий">
             <h3 data-git-target="heading">Изменения в репозитории</h3>
-            <p>
-              Git показывает сохранённое содержимое файлов. Права доступа, ссылки и подмодули не сравниваются.
-              Удалённые строки отмечены −, добавленные +.
-            </p>
-            <pre class="git-patch" tabindex="0" aria-label="Git diff" data-git-target="patch"></pre>
+            <div class="git-diff-toolbar">
+              <select
+                data-git-target="fileSelect"
+                data-action="change->git#commitFile"
+                aria-label="Файл коммита"
+                hidden
+              ></select>
+              <button
+                type="button"
+                class="btn btn-plain"
+                data-git-target="workingVersion"
+                data-action="git#showWorking"
+                hidden
+              >
+                Рабочая версия
+              </button>
+              <div data-git-target="diffControls" class="git-diff-actions" hidden>
+                <button
+                  type="button"
+                  class="btn btn-plain"
+                  data-action="git#previousChange"
+                  title="Предыдущее изменение · Shift+F7"
+                  aria-label="Предыдущее изменение"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-plain"
+                  data-action="git#nextChange"
+                  title="Следующее изменение · F7"
+                  aria-label="Следующее изменение"
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-plain"
+                  data-git-target="layout"
+                  data-action="git#toggleLayout"
+                >
+                  Единый вид
+                </button>
+              </div>
+            </div>
+            <div class="git-version-labels" data-git-target="versions" hidden>
+              <span>Было</span><span>Стало</span>
+            </div>
+            <div class="git-patch" tabindex="0" aria-label="Git diff" data-git-target="patch"></div>
           </section>
         </div>
       </dialog>

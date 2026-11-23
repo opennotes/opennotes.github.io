@@ -112,13 +112,13 @@ it("requires a worktree grant and overlays private HEAD/index over common object
 
 it("renders bounded UTF-8 diffs and makes binary and oversized comparisons explicit", () => {
   const bytes = (value) => new TextEncoder().encode(value);
-  expect(comparison({ path: "note", before: bytes("before\n"), after: bytes("after\n") })).toContain(
+  expect(comparison({ path: "note", before: bytes("before\n"), after: bytes("after\n") }).patch).toContain(
     "-before\n+after",
   );
-  expect(comparison({ path: "binary", before: new Uint8Array([0]) })).toContain("двоичный");
-  expect(comparison({ path: "binary", after: new Uint8Array([0]) })).toContain("двоичный");
-  expect(comparison({ path: "invalid", after: new Uint8Array([255]) })).toContain("не в UTF-8");
-  expect(comparison({ path: "large", after: new Uint8Array(1_048_577) })).toContain("слишком большой");
+  expect(comparison({ path: "binary", before: new Uint8Array([0]) }).patch).toContain("двоичный");
+  expect(comparison({ path: "binary", after: new Uint8Array([0]) }).patch).toContain("двоичный");
+  expect(comparison({ path: "invalid", after: new Uint8Array([255]) }).patch).toContain("не в UTF-8");
+  expect(comparison({ path: "large", after: new Uint8Array(1_048_577) }).patch).toContain("слишком большой");
   expect(
     comparison({ path: "crlf", before: bytes("line\n"), after: bytes("line\r\n"), autocrlf: true }),
   ).not.toContain("@@");
@@ -129,6 +129,6 @@ it("renders bounded UTF-8 diffs and makes binary and oversized comparisons expli
 
 it("explains a comparison that exceeds its processing budget", () => {
   const patch = vi.spyOn(diff, "createTwoFilesPatch").mockReturnValueOnce();
-  expect(comparison({ path: "complex" })).toContain("слишком сложное");
+  expect(comparison({ path: "complex" }).patch).toContain("слишком сложное");
   patch.mockRestore();
 });

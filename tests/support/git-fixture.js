@@ -83,6 +83,7 @@ export async function storeGitFolder(page, files) {
 }
 
 export async function openGitFolder(page, files) {
+  await page.locator('.app[data-ready="true"]').waitFor();
   await storeGitFolder(page, files);
   await page.locator('[data-action="workspace#toggleOpenMenu"]').click();
   await page.getByRole("button", { name: "Папку…", exact: true }).click();

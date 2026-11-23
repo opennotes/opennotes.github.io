@@ -7,17 +7,17 @@ const DIFF_TIMEOUT = 1500;
  * Decode bounded text, refusing binary files and expensive comparisons.
  *
  * @param {object} input - Path and before/after byte buffers.
- * @returns {string} Unified diff or a clear unsupported-comparison message.
+ * @returns {object} Text versions and a unified patch, or a comparison notice.
  */
 export function comparison(input) {
   const { path, before = new Uint8Array(), after = new Uint8Array(), autocrlf } = input;
 
   if (before.length + after.length > MAX_DIFF_BYTES) {
-    return `${path}: файл слишком большой для текстового diff (лимит 1 МБ).`;
+    return { patch: `${path}: файл слишком большой для текстового diff (лимит 1 МБ).` };
   }
 
   if (before.includes(0) || after.includes(0)) {
-    return `${path}: двоичный файл изменён.`;
+    return { patch: `${path}: двоичный файл изменён.` };
   }
 
   const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -30,11 +30,17 @@ export function comparison(input) {
       right = right.replaceAll("\r\n", "\n");
     }
 
-    return (
+    const patch =
       createTwoFilesPatch(`a/${path}`, `b/${path}`, left, right, "", "", { timeout: DIFF_TIMEOUT }) ??
-      `${path}: сравнение слишком сложное для просмотра в браузере.`
-    );
+      `${path}: сравнение слишком сложное для просмотра в браузере.`;
+
+    return {
+      path,
+      before: left,
+      after: right,
+      patch,
+    };
   } catch {
-    return `${path}: файл не в UTF-8; текстовый diff недоступен.`;
+    return { patch: `${path}: файл не в UTF-8; текстовый diff недоступен.` };
   }
 }

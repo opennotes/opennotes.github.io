@@ -69,10 +69,14 @@ it("selects both file comparisons, commit diffs and the next history page", asyn
   const git = await controller();
   workspace.project.dirHandle = folder();
   await git.refresh();
-  request.mockResolvedValue({ patch: "@@ -1 +1 @@\n-before\n+after\n <img>" });
+  request.mockImplementation(async (operation) =>
+    operation === "commit"
+      ? { files: ["note.md"] }
+      : { path: "note.md", before: "before\n <img>", after: "after\n <img>" },
+  );
   await git.selectChange({ currentTarget: { dataset: { path: "note.md", area: "staged" } } });
   expect(git.headingTarget.textContent).toContain("HEAD → индекс");
-  expect(git.patchTarget.querySelector(".git-added").textContent).toBe("+after\n");
+  expect(git.patchTarget.textContent).toContain("after");
   await git.selectChange({ currentTarget: { dataset: { path: "note.md", area: "working" } } });
   expect(git.headingTarget.textContent).toContain("рабочая папка");
   await git.selectCommit({ currentTarget: { dataset: { oid: COMMIT.oid } } });
@@ -90,8 +94,8 @@ it("distinguishes clean, unborn and unreadable changes and bounds diff rendering
   expect(git.commitsTarget.textContent).toContain("нет коммитов");
   git.renderRepository({ ...SNAPSHOT, changes: null });
   expect(git.changesTarget.textContent).not.toContain("чистая");
-  git.renderPatch({ patch: "line\n".repeat(5001) });
-  expect(git.patchTarget.textContent).toContain("Показаны первые 5000");
+  git.renderPatch({ patch: "Двоичный файл" });
+  expect(git.patchTarget.textContent).toContain("Двоичный файл");
   git.renderPatch({});
   expect(git.patchTarget.textContent).toContain("Нет различий");
 });
@@ -254,4 +258,79 @@ it("ignores a canceled worker initialization and its delayed failure", async () 
   expect(git.statusTarget.textContent).not.toBe("obsolete");
   git.renderRepository({ ...SNAPSHOT, changes: [], warning: "Excluded links" });
   expect(git.changesTarget.textContent).toContain("доступных файлах");
+});
+
+it("opens history directly from the active file and compares its saved version", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  workspace.project.currentPath = "note.md";
+  request.mockImplementation(async (operation) => {
+    if (operation === "diff" || operation === "commitDiff") {
+      return {
+        path: "note.md",
+        before: "before",
+        after: "after",
+      };
+    }
+    return SNAPSHOT;
+  });
+  git.openFileHistory();
+  await vi.waitFor(() => expect(git.diffView).not.toBeNull());
+  expect(git.changeSectionTarget.hidden).toBe(true);
+  expect(git.fileHistoryTitleTarget.textContent).toBe("История · note.md");
+  expect(request).toHaveBeenCalledWith("fileHistory", { path: "note.md", skip: 0 });
+  await git.selectCommit({ currentTarget: { dataset: { oid: COMMIT.oid } } });
+  expect(request).toHaveBeenLastCalledWith("commitDiff", { oid: COMMIT.oid, path: "note.md" });
+  expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(2);
+  git.nextChange();
+  git.previousChange();
+  git.toggleLayout();
+  expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(1);
+  expect(git.versionsTarget.hidden).toBe(true);
+  git.toggleLayout();
+  expect(git.patchTarget.querySelectorAll(".cm-editor")).toHaveLength(2);
+  request.mockResolvedValue({ commits: [], more: false });
+  await git.older();
+  expect(request).toHaveBeenLastCalledWith("fileHistory", { path: "note.md", skip: 1 });
+  git.close();
+  git.nextChange();
+  git.previousChange();
+});
+
+it("handles empty commit file lists and closing while scoped history is loading", async () => {
+  const git = await controller();
+  git.renderCommit({ files: [] });
+  expect(git.fileSelectTarget.hidden).toBe(true);
+  workspace.project.dirHandle = folder();
+  await git.refresh();
+  git.filePath = "note.md";
+  git.dialogTarget.showModal();
+  let finish;
+  request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const pending = git.loadFileHistory();
+  git.close();
+  finish({ commits: [], more: false });
+  await pending;
+  expect(git.diffView).toBeNull();
+});
+
+it("handles F7 throughout the dialog without double-handling editor shortcuts", async () => {
+  const git = await controller();
+  const event = { key: "F7", defaultPrevented: false, shiftKey: false, preventDefault: vi.fn() };
+  git.diffKeydown(event);
+  expect(event.preventDefault).not.toHaveBeenCalled();
+  git.diffView = { navigate: vi.fn(), destroy: vi.fn() };
+  git.diffKeydown({ ...event, key: "Escape" });
+  git.diffKeydown({ ...event, defaultPrevented: true });
+  expect(git.diffView.navigate).not.toHaveBeenCalled();
+  git.diffKeydown(event);
+  expect(event.preventDefault).toHaveBeenCalledOnce();
+  expect(git.diffView.navigate).toHaveBeenLastCalledWith(false);
+  git.diffKeydown({ ...event, shiftKey: true });
+  expect(git.diffView.navigate).toHaveBeenLastCalledWith(true);
 });
