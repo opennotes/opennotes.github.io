@@ -62,7 +62,7 @@ it("opens the current folder, renders literal data and closes without touching t
   expect(git.commitsTarget.textContent).toContain("<script>");
   expect(git.commitsTarget.querySelector("script")).toBeNull();
   git.close();
-  expect(git.dialogTarget.open).toBe(false);
+  expect(git.panelTarget.hidden).toBe(true);
   expect(stop).toHaveBeenCalled();
 });
 
@@ -113,7 +113,7 @@ it("removes obsolete helper credentials without opening a connection", async () 
   const git = await controller();
   expect(sessionStorage.getItem("open-notes-git")).toBeNull();
   expect(location.hash).toBe("#other=keep");
-  expect(git.dialogTarget.open).toBe(false);
+  expect(git.panelTarget.hidden).toBe(true);
   const storage = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
     throw new Error("disabled");
   });
@@ -126,9 +126,9 @@ it("updates the branch on folder changes and clears data from the previous repos
   workspace.project.dirHandle = folder();
   await git.projectChanged();
   expect(git.launchTarget.textContent).toBe("Git · main");
-  git.dialogTarget.showModal();
+  git.openPanel();
   await git.projectChanged();
-  expect(git.contentTarget.hidden).toBe(false);
+  expect(git.panelTarget.hidden).toBe(true);
   workspace.project.dirHandle = null;
   await git.projectChanged();
   expect(git.launchTarget.textContent).toBe("Git");
@@ -313,7 +313,7 @@ it("handles empty commit file lists and closing while scoped history is loading"
   workspace.project.dirHandle = folder();
   await git.refresh();
   git.filePath = "note.md";
-  git.dialogTarget.showModal();
+  git.openPanel();
   let finish;
   request.mockImplementationOnce(
     () =>
@@ -449,7 +449,7 @@ it("restores the selected historical comparison and handles an empty repository 
     return SNAPSHOT;
   });
   git.mode = "history";
-  git.dialogTarget.showModal();
+  git.openPanel();
   await git.refresh();
   await vi.waitFor(() => expect(git.diffView).not.toBeNull());
   expect(git.afterLabelTarget.textContent).toContain("Коммит");
@@ -468,8 +468,59 @@ it("restores the working version when returning to a file's history", async () =
   git.openFileHistory();
   await vi.waitFor(() => expect(git.diffView).not.toBeNull());
   git.changesTabTarget.click();
-  await vi.waitFor(() => expect(git.beforeLabelTarget.textContent).toContain("Индекс"));
+  await vi.waitFor(() => expect(git.beforeLabelTarget.textContent).toContain("HEAD"));
   git.historyTabTarget.click();
   await vi.waitFor(() => expect(git.beforeLabelTarget.textContent).toContain("HEAD"));
   expect(git.workingVersionTarget.getAttribute("aria-current")).toBe("true");
+});
+
+it("keeps file and diff tabs independent and updates the comparison from an unsaved draft", async () => {
+  const git = await controller();
+  workspace.project.dirHandle = folder();
+  workspace.project.currentPath = "notes/note.md";
+  git.fileChanged();
+  expect(git.fileTabTarget.textContent).toBe("note.md");
+  const draft = vi.spyOn(workspace.editor, "textFor").mockReturnValue("unsaved");
+  request.mockImplementation(async (operation, selection) =>
+    operation === "diff" ? { path: selection.path, before: "before", after: selection.draft } : SNAPSHOT,
+  );
+  git.openFileChanges();
+  await vi.waitFor(() => expect(git.diffView).not.toBeNull());
+  expect(git.filePaneTarget.hidden).toBe(true);
+  expect(git.tabBarTarget.hidden).toBe(false);
+  expect(git.diffTabTarget.textContent).toBe("note.md · изменения");
+  expect(git.diffTabTarget.title).toBe("notes/note.md");
+  expect(git.patchTarget.textContent).toContain("unsaved");
+  git.fileActionsTarget.click();
+  await vi.waitFor(() => expect(git.commitsTarget.textContent).toContain("Initial"));
+  expect(git.navigationTarget.hidden).toBe(false);
+  git.changesTabTarget.click();
+  await vi.waitFor(() => expect(git.navigationTarget.hidden).toBe(true));
+  const firstView = git.diffView;
+  git.activateFile();
+  expect(git.panelTarget.hidden).toBe(true);
+  expect(git.diffView).toBe(firstView);
+  git.activateDiff();
+  await vi.waitFor(() => expect(git.patchTarget.getAttribute("aria-busy")).toBe("false"));
+  expect(git.diffView).toBe(firstView);
+  draft.mockReturnValue("edited draft");
+  const position = firstView.snapshot();
+  const restore = vi.spyOn(git, "renderPatch");
+  git.activateFile();
+  git.activateDiff();
+  await vi.waitFor(() => expect(restore).toHaveBeenCalled());
+  expect(git.patchTarget.textContent).toContain("edited draft");
+  expect(git.diffView.snapshot().anchor).toBe(position.anchor);
+  git.fileTabTarget.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  expect(git.diffTabTarget.getAttribute("aria-selected")).toBe("true");
+  git.diffTabTarget.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  expect(git.fileTabTarget.getAttribute("aria-selected")).toBe("true");
+  git.editorTabKey({ key: "Enter" });
+  workspace.project.currentPath = null;
+  git.fileChanged();
+  expect(git.fileTabTarget.textContent).toBe("Файл");
+  git.close();
+  expect(git.tabBarTarget.hidden).toBe(true);
+  git.activateDiff();
+  expect(git.diffView).toBeNull();
 });

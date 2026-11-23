@@ -52,3 +52,26 @@ it("handles identical text without creating fake changed-block positions", () =>
   expect(diff.position).toEqual({ current: 0, total: 0 });
   diff.destroy();
 });
+
+it.each([true, false])("restores selection and scroll offsets in unified=%s", async (isUnified) => {
+  const parent = document.createElement("div");
+  document.body.append(parent);
+  const diff = new DiffView(parent, CONTENTS, { isUnified, hasWrapping: false });
+  const scroll = diff.merge?.dom || diff.view.scrollDOM;
+  diff.view.dispatch({ selection: { anchor: 3 } });
+  scroll.scrollTop = 50;
+  diff.view.scrollDOM.scrollLeft = 20;
+  const position = diff.snapshot();
+  expect(position).toEqual({ anchor: 3, top: 50, left: 20 });
+  diff.view.dispatch({ selection: { anchor: 0 } });
+  scroll.scrollTop = 0;
+  diff.view.scrollDOM.scrollLeft = 0;
+  diff.restore(position);
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+  expect(diff.snapshot()).toEqual(position);
+  diff.restore({ ...position, anchor: 99_999 });
+  expect(diff.view.state.selection.main.anchor).toBe(CONTENTS.after.length);
+  diff.destroy();
+});

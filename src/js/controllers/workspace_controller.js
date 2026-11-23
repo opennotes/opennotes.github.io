@@ -773,6 +773,7 @@ export default class WorkspaceController extends Controller {
     if (this.project.currentPath === path) {
       this.openVersion++;
       this.opening.clear();
+      this.dispatch("file-selected");
       this.closeSidebar();
 
       return;

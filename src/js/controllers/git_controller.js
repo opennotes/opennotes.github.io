@@ -24,6 +24,7 @@ const CHANGE_GROUPS = [
 
 const SHORT_OID_LENGTH = 8;
 const MOBILE_WIDTH = 768;
+const SELECTED_ATTRIBUTE = "aria-selected";
 const CURRENT_ATTRIBUTE = "aria-current";
 const CURRENT_ROW = '[aria-current="true"]';
 
@@ -43,7 +44,13 @@ function textNode(tag, text) {
 
 export default class GitController extends WorkspaceComponent {
   static targets = [
-    "dialog",
+    "panel",
+    "navigation",
+    "fileActions",
+    "tabBar",
+    "filePane",
+    "fileTab",
+    "diffTab",
     "mainFolder",
     "repository",
     "launch",
@@ -79,12 +86,14 @@ export default class GitController extends WorkspaceComponent {
    * Keep canceled requests obsolete after reconnecting or changing folders.
    */
   initialize() {
+    this.hasGitTab = false;
+    this.comparisonRequest = null;
     this.version = 0;
     this.reader = null;
     this.main = undefined;
     this.filePath = null;
     this.diffView = null;
-    this.isUnified = window.innerWidth <= MOBILE_WIDTH;
+    this.isUnified = (this.patchTarget.clientWidth || window.innerWidth) <= MOBILE_WIDTH;
     this.hasLayoutPreference = false;
     this.DiffView = null;
     this.mode = "changes";
@@ -126,21 +135,23 @@ export default class GitController extends WorkspaceComponent {
   open() {
     this.filePath = null;
     this.mode = "changes";
-    this.dialogTarget.showModal();
+    this.openPanel();
     void this.refresh();
   }
   /**
    * Close Git while preserving the currently edited document.
    */
   close() {
-    this.dialogTarget.close();
+    this.hasGitTab = false;
+    this.activateFile();
     this.disconnect();
+    this.comparisonRequest = null;
   }
   /**
    * Discard another folder's data and show the new branch immediately.
    */
   async projectChanged() {
-    this.disconnect();
+    this.close();
     this.main = undefined;
     this.filePath = null;
     this.contentTarget.hidden = true;
@@ -158,10 +169,117 @@ export default class GitController extends WorkspaceComponent {
     } catch {
       // The Git view explains a missing repository or extra worktree grant when opened.
     }
-
-    if (this.dialogTarget.open && version === this.version) {
-      await this.refresh();
+  }
+  /**
+   * Show comparisons inside the editor without blocking the project tree.
+   */
+  openPanel() {
+    this.hasGitTab = true;
+    this.showPanel(true);
+    this.workspace.closeSidebar();
+  }
+  /**
+   * Switch panes while retaining their mounted editor states and scroll positions.
+   *
+   * @param {boolean} isDiff - Whether the comparison tab is selected.
+   */
+  showPanel(isDiff) {
+    this.tabBarTarget.hidden = !this.hasGitTab;
+    this.filePaneTarget.hidden = isDiff;
+    this.panelTarget.hidden = !isDiff;
+    this.fileTabTarget.setAttribute(SELECTED_ATTRIBUTE, String(!isDiff));
+    this.diffTabTarget.setAttribute(SELECTED_ATTRIBUTE, String(isDiff));
+    this.fileTabTarget.tabIndex = isDiff ? -1 : 0;
+    this.diffTabTarget.tabIndex = isDiff ? 0 : -1;
+  }
+  /**
+   * Return to the editable file, preserving its undo history and selection.
+   */
+  activateFile() {
+    this.showPanel(false);
+    this.workspace.editor.view?.requestMeasure();
+  }
+  /**
+   * Return to the last comparison, including any changes made in the editor.
+   */
+  activateDiff() {
+    this.showPanel(true);
+    this.diffView?.view.requestMeasure();
+    if (this.reader && this.comparisonRequest?.[0] === "diff") {
+      void this.compare(this.comparisonRequest);
     }
+  }
+  /**
+   * Keep file tabs named after the active document and reveal newly opened files.
+   */
+  fileChanged() {
+    const path = this.project.currentPath;
+    this.fileTabTarget.textContent = path?.split("/").pop() || "Файл";
+    this.fileTabTarget.title = path || "";
+    this.activateFile();
+  }
+  /**
+   * Open the current file's changes directly beside its editing tab.
+   */
+  openFileChanges() {
+    this.filePath = this.project.currentPath;
+    this.mode = "changes";
+    this.openPanel();
+    void this.refresh();
+  }
+  /**
+   * Use standard arrow-key navigation between editor tabs.
+   *
+   * @param {KeyboardEvent} event - Tab-list keyboard input.
+   */
+  editorTabKey(event) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+
+    event.preventDefault();
+    const tab = event.key === "ArrowLeft" ? this.fileTabTarget : this.diffTabTarget;
+    tab.click();
+    tab.focus();
+  }
+  /**
+   * Read the latest draft for working comparisons and retain unchanged views.
+   *
+   * @param {Array} request - Comparison operation and canonical selection.
+   */
+  async compare(request) {
+    this.comparisonRequest = request;
+
+    const [
+      operation,
+      selection,
+    ] = request;
+
+    this.diffTabTarget.textContent = `${selection.path.split("/").pop()} · изменения`;
+    this.diffTabTarget.title = selection.path;
+    const args = { ...selection };
+
+    if (operation === "diff" && args.area !== "staged") {
+      args.draft = this.workspace.editor.textFor(args.path);
+    }
+
+    await this.load(
+      [
+        operation,
+        args,
+      ],
+      (data) => {
+        if (this.diffView && JSON.stringify(data) === JSON.stringify(this.comparison)) {
+          return;
+        }
+
+        const position = data.path === this.comparison?.path ? this.diffView?.snapshot() : null;
+        this.renderPatch(data);
+        if (position) {
+          this.diffView?.restore(position);
+        }
+      },
+    );
   }
   /**
    * Grant access to shared metadata for a linked Git worktree.
@@ -181,6 +299,7 @@ export default class GitController extends WorkspaceComponent {
    */
   async refresh() {
     this.disconnect();
+    this.comparisonRequest = null;
     const version = this.version;
     this.contentTarget.hidden = true;
     this.mainFolderTarget.hidden = true;
@@ -203,7 +322,7 @@ export default class GitController extends WorkspaceComponent {
         ],
         (data) => this.renderRepository(data),
       );
-      if (this.filePath && this.reader && this.dialogTarget.open) {
+      if (this.filePath && this.mode === "history" && this.reader) {
         await this.loadFileHistory();
       }
     } catch (error) {
@@ -283,7 +402,7 @@ export default class GitController extends WorkspaceComponent {
     this.renderSidebar(data);
 
     this.renderPlaceholder(data);
-    if (!this.dialogTarget.open) {
+    if (!this.hasGitTab) {
       return;
     }
 
@@ -337,6 +456,12 @@ export default class GitController extends WorkspaceComponent {
    * Open the current file's working changes, or the first available comparison.
    */
   selectInitialChange() {
+    if (this.filePath) {
+      void this.showWorking();
+
+      return;
+    }
+
     const buttons = [
       ...this.changesTarget.querySelectorAll("button"),
     ];
@@ -436,13 +561,10 @@ export default class GitController extends WorkspaceComponent {
     selectRow(this.changesTarget, button);
     this.clearDiff();
     this.commitFilesTarget.hidden = true;
-    await this.load(
-      [
-        "diff",
-        { path, area },
-      ],
-      (data) => this.renderPatch(data),
-    );
+    await this.compare([
+      "diff",
+      { path, area },
+    ]);
   }
   /**
    * Show the selected commit's patch relative to its first parent.
@@ -465,13 +587,10 @@ export default class GitController extends WorkspaceComponent {
     this.setVersions("Предыдущая версия", `Коммит ${oid.slice(0, SHORT_OID_LENGTH)}`);
     this.clearDiff();
     if (this.filePath) {
-      await this.load(
-        [
-          "commitDiff",
-          { oid, path: this.filePath },
-        ],
-        (data) => this.renderPatch(data),
-      );
+      await this.compare([
+        "commitDiff",
+        { oid, path: this.filePath },
+      ]);
 
       return;
     }
@@ -526,13 +645,10 @@ export default class GitController extends WorkspaceComponent {
     ].find((button) => button.dataset.path === path);
 
     selectRow(this.commitFileListTarget, row);
-    await this.load(
-      [
-        "commitDiff",
-        { oid: this.commitOid, path },
-      ],
-      (data) => this.renderPatch(data),
-    );
+    await this.compare([
+      "commitDiff",
+      { oid: this.commitOid, path },
+    ]);
   }
   /**
    * Retrieve older commits without loading the entire history into the page.
@@ -558,7 +674,7 @@ export default class GitController extends WorkspaceComponent {
   openFileHistory() {
     this.filePath = this.project.currentPath;
     this.mode = "history";
-    this.dialogTarget.showModal();
+    this.openPanel();
     void this.refresh();
   }
   /**
@@ -574,7 +690,7 @@ export default class GitController extends WorkspaceComponent {
       ],
       (data) => this.renderHistory(data),
     );
-    if (reader === this.reader && this.dialogTarget.open) {
+    if (reader === this.reader && this.hasGitTab) {
       await this.showWorking();
     }
   }
@@ -586,13 +702,10 @@ export default class GitController extends WorkspaceComponent {
     this.setVersions("Последний коммит · HEAD", "Рабочая копия");
     selectRow(this.commitsTarget, null);
     this.workingVersionTarget.setAttribute(CURRENT_ATTRIBUTE, "true");
-    await this.load(
-      [
-        "diff",
-        { path: this.filePath, area: "file" },
-      ],
-      (data) => this.renderPatch(data),
-    );
+    await this.compare([
+      "diff",
+      { path: this.filePath, area: "file" },
+    ]);
   }
   /**
    * Dispose the previous comparison before changing selection or closing.
@@ -622,7 +735,7 @@ export default class GitController extends WorkspaceComponent {
 
     this.diffControlsTarget.hidden = false;
     if (!this.hasLayoutPreference) {
-      this.isUnified = window.innerWidth <= MOBILE_WIDTH;
+      this.isUnified = (this.patchTarget.clientWidth || window.innerWidth) <= MOBILE_WIDTH;
     }
 
     this.versionsTarget.hidden = false;
@@ -657,6 +770,12 @@ export default class GitController extends WorkspaceComponent {
       return;
     }
 
+    if (this.filePath && this.commitsTarget.childElementCount === 0) {
+      void this.loadFileHistory();
+
+      return;
+    }
+
     this.selectHistory();
   }
   /**
@@ -685,10 +804,14 @@ export default class GitController extends WorkspaceComponent {
    */
   updateMode() {
     const isHistory = this.mode === "history";
+    const isFocused = Boolean(this.filePath) && !isHistory;
+    this.navigationTarget.hidden = isFocused;
+    this.contentTarget.classList.toggle("git-focused", isFocused);
+    this.fileActionsTarget.hidden = !isFocused;
     this.changeSectionTarget.hidden = isHistory;
     this.historySectionTarget.hidden = !isHistory;
-    this.changesTabTarget.setAttribute("aria-selected", String(!isHistory));
-    this.historyTabTarget.setAttribute("aria-selected", String(isHistory));
+    this.changesTabTarget.setAttribute(SELECTED_ATTRIBUTE, String(!isHistory));
+    this.historyTabTarget.setAttribute(SELECTED_ATTRIBUTE, String(isHistory));
     this.changesTabTarget.tabIndex = isHistory ? -1 : 0;
     this.historyTabTarget.tabIndex = isHistory ? 0 : -1;
   }
@@ -739,7 +862,7 @@ export default class GitController extends WorkspaceComponent {
       return;
     }
 
-    const isUnified = window.innerWidth <= MOBILE_WIDTH;
+    const isUnified = (this.patchTarget.clientWidth || window.innerWidth) <= MOBILE_WIDTH;
 
     if (this.isUnified === isUnified) {
       return;
@@ -764,11 +887,18 @@ export default class GitController extends WorkspaceComponent {
     tab.click();
   }
   /**
-   * Keep change-navigation shortcuts available throughout the open diff dialog.
+   * Keep change-navigation shortcuts available throughout the comparison tab.
    *
-   * @param {KeyboardEvent} event - Keyboard input from any dialog control.
+   * @param {KeyboardEvent} event - Keyboard input from any comparison control.
    */
   diffKeydown(event) {
+    if (event.key === "Escape") {
+      this.activateFile();
+      this.fileTabTarget.focus();
+
+      return;
+    }
+
     if (event.key !== "F7" || event.defaultPrevented || !this.diffView) {
       return;
     }

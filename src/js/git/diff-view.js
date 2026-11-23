@@ -141,6 +141,36 @@ export class DiffView {
     this.view.focus();
   }
   /**
+   * Capture reading position before refreshing a working comparison.
+   *
+   * @returns {object} Selection and scroll offsets in the current layout.
+   */
+  snapshot() {
+    const scroll = this.merge?.dom || this.view.scrollDOM;
+
+    return {
+      anchor: this.view.state.selection.main.anchor,
+      top: scroll.scrollTop,
+      left: this.view.scrollDOM.scrollLeft,
+    };
+  }
+  /**
+   * Restore a reading position after receiving updated working text.
+   *
+   * @param {object} position - Previously captured reading position.
+   */
+  restore(position) {
+    this.view.dispatch({ selection: { anchor: Math.min(position.anchor, this.view.state.doc.length) } });
+    this.view.requestMeasure({
+      read: () => null,
+      write: () => {
+        const scroll = this.merge?.dom || this.view.scrollDOM;
+        scroll.scrollTop = position.top;
+        this.view.scrollDOM.scrollLeft = position.left;
+      },
+    });
+  }
+  /**
    * Release CodeMirror views when closing or switching comparisons.
    */
   destroy() {

@@ -269,6 +269,7 @@ export default class EditorController extends WorkspaceComponent {
     const path = this.project.currentPath;
     const node = this.project.nodes.get(path);
     this.pathLabelTarget.textContent = path;
+    this.dispatch("path-changed");
     if (this.editorSession) {
       this.editorSession.handle = this.project.fileHandle;
     }
@@ -283,19 +284,28 @@ export default class EditorController extends WorkspaceComponent {
       return;
     }
 
+    this.refreshPreviewName(node.name);
+  }
+
+  /**
+   * Update accessible labels after renaming a previewed file.
+   *
+   * @param {string} fileName - New file name.
+   */
+  refreshPreviewName(fileName) {
     {
       const object = this.editorTarget.querySelector("object");
-      object?.setAttribute("aria-label", `Просмотр: ${node.name}`);
+      object?.setAttribute("aria-label", `Просмотр: ${fileName}`);
       const link = object?.querySelector("a");
 
       if (link) {
-        link.download = node.name;
+        link.download = fileName;
       }
 
       const name = object?.querySelector(".object-fallback-name");
 
       if (name) {
-        name.textContent = node.name;
+        name.textContent = fileName;
       }
     }
   }
@@ -591,6 +601,7 @@ export default class EditorController extends WorkspaceComponent {
     this.workspace.placeholderTarget.hidden = false;
     this.pathLabelTarget.textContent = "";
     this.editorTarget.replaceChildren();
+    this.dispatch("path-changed");
     this.workspace.mobileTitleTarget.textContent =
       this.workspace.rootNameTarget.textContent === "—"
         ? "Open Notes"

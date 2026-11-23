@@ -44,7 +44,7 @@
       data-tree-drop-target-class="drop-target"
       data-tree-root-drop-target-class="root-drop-target"
       data-editor-preview-class="preview-mode"
-      data-action="workspace:project-changed->git#projectChanged tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions visibilitychange@document->editor#refreshFromDisk focus@window->editor#refreshFromDisk"
+      data-action="editor:path-changed->git#fileChanged workspace:file-selected->git#activateFile workspace:project-changed->git#projectChanged tree:select->workspace#selectFile editor:rules-changed->workspace#refreshExclusions visibilitychange@document->editor#refreshFromDisk focus@window->editor#refreshFromDisk"
       data-workspace-target="app"
     >
       <div class="banner" data-workspace-target="banner" role="alert">
@@ -265,303 +265,551 @@
       <div class="opening-feedback" data-workspace-target="opening" role="status" hidden></div>
       <main class="main" data-workspace-target="content" aria-busy="false">
         <div
-          class="toolbar"
-          data-editor-target="toolbar"
-          data-action="mousedown->editor#keepEditorSelection"
+          class="editor-tabs"
+          data-git-target="tabBar"
+          role="tablist"
+          aria-label="Рабочая область"
+          data-action="keydown->git#editorTabKey"
           hidden
         >
-          <div class="toolbar-group">
-            <button
-              type="button"
-              class="tool-btn"
-              title="Заголовок 1"
-              data-action="editor#headingOne"
-              aria-label="Заголовок 1"
-            >
-              H1
-            </button>
-            <button
-              type="button"
-              class="tool-btn"
-              title="Заголовок 2"
-              data-action="editor#headingTwo"
-              aria-label="Заголовок 2"
-            >
-              H2
-            </button>
-            <button
-              type="button"
-              class="tool-btn"
-              title="Заголовок 3"
-              data-action="editor#headingThree"
-              aria-label="Заголовок 3"
-            >
-              H3
-            </button>
-          </div>
-          <div class="toolbar-group">
-            <button
-              type="button"
-              class="tool-btn"
-              title="Жирный"
-              data-action="editor#bold"
-              aria-label="Жирный"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M7 5h6a3.5 3.5 0 0 1 0 7H7V5Zm0 7h7a3.5 3.5 0 0 1 0 7H7v-7Z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="tool-btn"
-              title="Курсив"
-              data-action="editor#italic"
-              aria-label="Курсив"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M10 5h8M6 19h8M14 5l-4 14" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="tool-btn"
-              title="Ссылка"
-              data-action="editor#link"
-              aria-label="Ссылка"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path
-                  d="m10 14 4-4m-5 6-2 2a4.24 4.24 0 0 1-6-6l4-4a4.24 4.24 0 0 1 6 0m2 0 2-2a4.24 4.24 0 0 1 6 6l-4 4a4.24 4.24 0 0 1-6 0"
-                />
-              </svg>
-            </button>
-          </div>
-          <div class="toolbar-group">
-            <button
-              type="button"
-              class="tool-btn"
-              title="Цитата"
-              data-action="editor#quote"
-              aria-label="Цитата"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M4 5v14M9 7h11M9 12h11M9 17h7" />
-              </svg>
-            </button>
-            <button type="button" class="tool-btn" title="Код" data-action="editor#code" aria-label="Код">
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="m8 7-5 5 5 5m8-10 5 5-5 5" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="tool-btn"
-              title="Список"
-              data-action="editor#list"
-              aria-label="Список"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M9 6h11M9 12h11M9 18h11" />
-                <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
-                <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
-                <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="tool-btn"
-              title="Нумерованный"
-              data-action="editor#orderedList"
-              aria-label="Нумерованный список"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M10 7h10M10 17h10M3 4h1v6M3 10h2M3 16a1.5 1.5 0 0 1 3 0c0 1-1 2-3 4h3" />
-              </svg>
-            </button>
-          </div>
           <button
+            id="editor-file-tab"
             type="button"
-            class="tool-btn line-numbers-toggle"
-            data-editor-target="lineNumbers"
-            data-action="editor#toggleLineNumbers"
-            aria-label="Номера строк"
-            aria-pressed="false"
-            title="Номера строк"
+            role="tab"
+            aria-selected="true"
+            aria-controls="editor-file-pane"
+            data-git-target="fileTab"
+            data-action="git#activateFile"
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <rect x="3" y="4" width="18" height="16" rx="2" />
-              <path d="M9 4v16M12 8h6M12 12h6M12 16h6M6 8h.01M6 12h.01M6 16h.01" />
-            </svg>
+            Файл
           </button>
-          <div class="file-info">
-            <button
-              type="button"
-              class="file-path"
-              data-editor-target="pathLabel"
-              data-action="editor#revealInTree"
-              aria-label="Показать в дереве"
-              title="Показать в дереве"
-            ></button>
-            <button
-              type="button"
-              class="icon-btn"
-              data-action="git#openFileHistory"
-              aria-label="История файла"
-              title="История файла"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.75"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2" />
-              </svg>
-            </button>
-            <span class="cursor-position" data-editor-target="cursorPosition" hidden></span>
-            <button
-              type="button"
-              class="icon-btn download-btn"
-              data-editor-target="download"
-              data-action="editor#downloadFile"
-              aria-label="Скачать"
-              title="Скачать файл"
-              hidden
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.75"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4" />
-              </svg>
-            </button>
-          </div>
+          <button
+            id="editor-diff-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="editor-diff-pane"
+            tabindex="-1"
+            data-git-target="diffTab"
+            data-action="git#activateDiff"
+          >
+            Изменения
+          </button>
         </div>
-
-        <div class="editor-wrap">
-          <div class="placeholder" data-workspace-target="placeholder">
-            <div class="placeholder-icon">
-              <svg
-                width="70"
-                height="70"
-                viewBox="0 0 70 70"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-                focusable="false"
+        <section
+          class="editor-file-pane"
+          id="editor-file-pane"
+          role="tabpanel"
+          aria-labelledby="editor-file-tab"
+          data-git-target="filePane"
+        >
+          <div
+            class="toolbar"
+            data-editor-target="toolbar"
+            data-action="mousedown->editor#keepEditorSelection"
+            hidden
+          >
+            <div class="toolbar-group">
+              <button
+                type="button"
+                class="tool-btn"
+                title="Заголовок 1"
+                data-action="editor#headingOne"
+                aria-label="Заголовок 1"
               >
-                <rect width="70" height="70" rx="19" fill="var(--bg-elevated)" />
-                <path
-                  d="M44.6145 35.285C45.928 33.9715 46.6659 32.1901 46.6659 30.3325C46.6659 28.475 45.928 26.6935 44.6145 25.38C43.301 24.0665 41.5195 23.3286 39.662 23.3286C37.8044 23.3286 36.023 24.0665 34.7095 25.38L26.8345 33.255V43.1717H36.7511L44.6145 35.285Z"
-                  stroke-width="2"
+                H1
+              </button>
+              <button
+                type="button"
+                class="tool-btn"
+                title="Заголовок 2"
+                data-action="editor#headingTwo"
+                aria-label="Заголовок 2"
+              >
+                H2
+              </button>
+              <button
+                type="button"
+                class="tool-btn"
+                title="Заголовок 3"
+                data-action="editor#headingThree"
+                aria-label="Заголовок 3"
+              >
+                H3
+              </button>
+            </div>
+            <div class="toolbar-group">
+              <button
+                type="button"
+                class="tool-btn"
+                title="Жирный"
+                data-action="editor#bold"
+                aria-label="Жирный"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M7 5h6a3.5 3.5 0 0 1 0 7H7V5Zm0 7h7a3.5 3.5 0 0 1 0 7H7v-7Z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="tool-btn"
+                title="Курсив"
+                data-action="editor#italic"
+                aria-label="Курсив"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M10 5h8M6 19h8M14 5l-4 14" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="tool-btn"
+                title="Ссылка"
+                data-action="editor#link"
+                aria-label="Ссылка"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    d="m10 14 4-4m-5 6-2 2a4.24 4.24 0 0 1-6-6l4-4a4.24 4.24 0 0 1 6 0m2 0 2-2a4.24 4.24 0 0 1 6 6l-4 4a4.24 4.24 0 0 1-6 0"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div class="toolbar-group">
+              <button
+                type="button"
+                class="tool-btn"
+                title="Цитата"
+                data-action="editor#quote"
+                aria-label="Цитата"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 5v14M9 7h11M9 12h11M9 17h7" />
+                </svg>
+              </button>
+              <button type="button" class="tool-btn" title="Код" data-action="editor#code" aria-label="Код">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="m8 7-5 5 5 5m8-10 5 5-5 5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="tool-btn"
+                title="Список"
+                data-action="editor#list"
+                aria-label="Список"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M9 6h11M9 12h11M9 18h11" />
+                  <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
+                  <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
+                  <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="tool-btn"
+                title="Нумерованный"
+                data-action="editor#orderedList"
+                aria-label="Нумерованный список"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M10 7h10M10 17h10M3 4h1v6M3 10h2M3 16a1.5 1.5 0 0 1 3 0c0 1-1 2-3 4h3" />
+                </svg>
+              </button>
+            </div>
+            <button
+              type="button"
+              class="tool-btn line-numbers-toggle"
+              data-editor-target="lineNumbers"
+              data-action="editor#toggleLineNumbers"
+              aria-label="Номера строк"
+              aria-pressed="false"
+              title="Номера строк"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 4v16M12 8h6M12 12h6M12 16h6M6 8h.01M6 12h.01M6 16h.01" />
+              </svg>
+            </button>
+            <div class="file-info">
+              <button
+                type="button"
+                class="file-path"
+                data-editor-target="pathLabel"
+                data-action="editor#revealInTree"
+                aria-label="Показать в дереве"
+                title="Показать в дереве"
+              ></button>
+              <button
+                type="button"
+                class="icon-btn"
+                data-action="git#openFileChanges"
+                aria-label="Изменения файла"
+                title="Изменения файла"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
                   stroke-linecap="round"
                   stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 4H4v16h5M15 4h5v16h-5M7 8v8M4 12h6M14 12h6" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="icon-btn"
+                data-action="git#openFileHistory"
+                aria-label="История файла"
+                title="История файла"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
                   stroke="currentColor"
-                />
-                <path
-                  d="M39.6678 30.3384L23.3345 46.6717"
-                  stroke-width="2"
+                  stroke-width="1.75"
                   stroke-linecap="round"
                   stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 11a9 9 0 1 1 2.7 7M3 4v7h7M12 7v5l3 2" />
+                </svg>
+              </button>
+              <span class="cursor-position" data-editor-target="cursorPosition" hidden></span>
+              <button
+                type="button"
+                class="icon-btn download-btn"
+                data-editor-target="download"
+                data-action="editor#downloadFile"
+                aria-label="Скачать"
+                title="Скачать файл"
+                hidden
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
                   stroke="currentColor"
-                />
-                <path
-                  d="M41.4176 38.5049H31.501"
-                  stroke-width="2"
+                  stroke-width="1.75"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  stroke="currentColor"
-                />
-                <mask
-                  id="placeholder-logo-mask"
-                  style="mask-type: alpha"
-                  maskUnits="userSpaceOnUse"
-                  x="0"
-                  y="0"
+                >
+                  <path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="editor-wrap">
+            <div class="placeholder" data-workspace-target="placeholder">
+              <div class="placeholder-icon">
+                <svg
                   width="70"
                   height="70"
+                  viewBox="0 0 70 70"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                  focusable="false"
                 >
-                  <rect width="70" height="70" rx="19" fill="white" />
-                </mask>
-                <g mask="url(#placeholder-logo-mask)">
+                  <rect width="70" height="70" rx="19" fill="var(--bg-elevated)" />
                   <path
-                    d="M49.5294 49.2126C31.6302 57.3802 24.2582 78.5209 20.9535 91.1662C19.8085 95.5472 23.8079 103.04 28.3001 103.609C41.9106 105.334 66.5472 105.575 86.9475 101.134C114.666 95.0996 97.9985 57.893 99.0461 44.9272C99.087 44.421 99.1087 43.9609 99.0342 43.4585C95.9973 22.9852 60.4157 -42.0671 61.1319 -24.8985C62.038 -3.17768 79.4059 35.5796 49.5294 49.2126Z"
-                    fill="url(#placeholder-logo-shading)"
-                    fill-opacity="0.4"
+                    d="M44.6145 35.285C45.928 33.9715 46.6659 32.1901 46.6659 30.3325C46.6659 28.475 45.928 26.6935 44.6145 25.38C43.301 24.0665 41.5195 23.3286 39.662 23.3286C37.8044 23.3286 36.023 24.0665 34.7095 25.38L26.8345 33.255V43.1717H36.7511L44.6145 35.285Z"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke="currentColor"
                   />
-                </g>
-                <defs>
-                  <linearGradient
-                    id="placeholder-logo-shading"
-                    x1="-71.1548"
-                    y1="-58.2782"
-                    x2="-0.0818216"
-                    y2="114.192"
-                    gradientUnits="userSpaceOnUse"
+                  <path
+                    d="M39.6678 30.3384L23.3345 46.6717"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke="currentColor"
+                  />
+                  <path
+                    d="M41.4176 38.5049H31.501"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke="currentColor"
+                  />
+                  <mask
+                    id="placeholder-logo-mask"
+                    style="mask-type: alpha"
+                    maskUnits="userSpaceOnUse"
+                    x="0"
+                    y="0"
+                    width="70"
+                    height="70"
                   >
-                    <stop stop-color="currentColor" />
-                    <stop offset="1" stop-color="currentColor" stop-opacity="0" />
-                  </linearGradient>
-                </defs>
-              </svg>
+                    <rect width="70" height="70" rx="19" fill="white" />
+                  </mask>
+                  <g mask="url(#placeholder-logo-mask)">
+                    <path
+                      d="M49.5294 49.2126C31.6302 57.3802 24.2582 78.5209 20.9535 91.1662C19.8085 95.5472 23.8079 103.04 28.3001 103.609C41.9106 105.334 66.5472 105.575 86.9475 101.134C114.666 95.0996 97.9985 57.893 99.0461 44.9272C99.087 44.421 99.1087 43.9609 99.0342 43.4585C95.9973 22.9852 60.4157 -42.0671 61.1319 -24.8985C62.038 -3.17768 79.4059 35.5796 49.5294 49.2126Z"
+                      fill="url(#placeholder-logo-shading)"
+                      fill-opacity="0.4"
+                    />
+                  </g>
+                  <defs>
+                    <linearGradient
+                      id="placeholder-logo-shading"
+                      x1="-71.1548"
+                      y1="-58.2782"
+                      x2="-0.0818216"
+                      y2="114.192"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop stop-color="currentColor" />
+                      <stop offset="1" stop-color="currentColor" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+              <h1>Open Notes</h1>
+              <p>Откройте папку или файл. Редактор с автосохранением на диск.</p>
+              <button
+                type="button"
+                class="quiet-action resume-project"
+                data-workspace-target="resumeButton"
+                data-action="workspace#resumeWorkspace"
+                hidden
+              ></button>
+              <div class="actions">
+                <button type="button" class="btn btn-filled" data-action="workspace#openDirectory">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                  Открыть папку
+                </button>
+                <button type="button" class="btn btn-plain" data-action="workspace#openFile">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <path d="M14 2v6h6" />
+                  </svg>
+                  Открыть файл
+                </button>
+              </div>
+              <div class="install-tip" data-install-tip hidden>
+                <install data-native-install>
+                  <button type="button" class="quiet-action" data-install-app hidden>
+                    Установить Open Notes
+                  </button>
+                  <a class="quiet-action" href="install.html" data-install-fallback>Как установить</a>
+                </install>
+                <p data-install-status role="status"></p>
+              </div>
             </div>
-            <h1>Open Notes</h1>
-            <p>Откройте папку или файл. Редактор с автосохранением на диск.</p>
+            <div class="editor-host" data-editor-target="editor" hidden></div>
+          </div>
+        </section>
+        <section
+          class="git-workspace"
+          id="editor-diff-pane"
+          role="tabpanel"
+          hidden
+          data-git-target="panel"
+          aria-labelledby="editor-diff-tab"
+          data-action="keydown->git#diffKeydown resize@window->git#resizeDiff"
+        >
+          <header class="git-header">
+            <h2 id="git-title">Git</h2>
+            <div class="git-identity" data-git-target="controls" hidden>
+              <span class="git-root" data-git-target="repository"></span>
+              <span class="git-branch" data-git-target="branch"></span>
+            </div>
             <button
               type="button"
-              class="quiet-action resume-project"
-              data-workspace-target="resumeButton"
-              data-action="workspace#resumeWorkspace"
+              class="git-file-history"
+              data-git-target="fileActions"
+              data-mode="history"
+              data-action="git#changeMode"
               hidden
-            ></button>
-            <div class="actions">
-              <button type="button" class="btn btn-filled" data-action="workspace#openDirectory">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.75"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+            >
+              История файла
+            </button>
+            <button
+              type="button"
+              class="git-icon-button git-refresh"
+              data-action="git#refresh"
+              aria-label="Обновить"
+              title="Обновить"
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              class="git-icon-button"
+              data-action="git#close"
+              aria-label="Закрыть вкладку изменений"
+              title="Закрыть вкладку изменений"
+            >
+              ×
+            </button>
+          </header>
+          <button
+            class="btn btn-plain"
+            type="button"
+            data-git-target="mainFolder"
+            data-action="git#chooseMain"
+            hidden
+          >
+            Выбрать основной репозиторий
+          </button>
+          <p class="git-message" data-git-target="status" role="status"></p>
+          <div class="git-layout" data-git-target="content" hidden>
+            <aside class="git-navigation" data-git-target="navigation" aria-label="Навигация Git">
+              <div
+                class="git-tabs"
+                role="tablist"
+                data-action="keydown->git#changeTab"
+                aria-label="Раздел Git"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  id="git-changes-tab"
+                  aria-controls="git-changes-panel"
+                  aria-selected="true"
+                  data-git-target="changesTab"
+                  data-mode="changes"
+                  data-action="git#changeMode"
                 >
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                </svg>
-                Открыть папку
-              </button>
-              <button type="button" class="btn btn-plain" data-action="workspace#openFile">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.75"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <path d="M14 2v6h6" />
-                </svg>
-                Открыть файл
-              </button>
-            </div>
-            <div class="install-tip" data-install-tip hidden>
-              <install data-native-install>
-                <button type="button" class="quiet-action" data-install-app hidden>
-                  Установить Open Notes
+                  Изменения
                 </button>
-                <a class="quiet-action" href="install.html" data-install-fallback>Как установить</a>
-              </install>
-              <p data-install-status role="status"></p>
-            </div>
+                <button
+                  type="button"
+                  role="tab"
+                  id="git-history-tab"
+                  aria-controls="git-history-panel"
+                  aria-selected="false"
+                  data-git-target="historyTab"
+                  data-mode="history"
+                  data-action="git#changeMode"
+                >
+                  История
+                </button>
+              </div>
+              <section
+                id="git-changes-panel"
+                class="git-panel git-change-list"
+                role="tabpanel"
+                aria-labelledby="git-changes-tab"
+                data-git-target="changeSection"
+              >
+                <div data-git-target="changes" data-action="keydown->git#navigateList"></div>
+              </section>
+              <section
+                id="git-history-panel"
+                class="git-panel git-history-panel"
+                role="tabpanel"
+                aria-labelledby="git-history-tab"
+                data-git-target="historySection"
+                hidden
+              >
+                <h3 class="git-panel-caption" data-git-target="fileHistoryTitle">История коммитов</h3>
+                <button
+                  type="button"
+                  class="git-working-version"
+                  data-git-target="workingVersion"
+                  data-action="git#showWorking"
+                  hidden
+                >
+                  Рабочая версия
+                </button>
+                <div
+                  class="git-history-list"
+                  data-git-target="commits"
+                  data-action="keydown->git#navigateList"
+                ></div>
+                <button class="git-more" type="button" data-git-target="more" data-action="git#older" hidden>
+                  Показать ещё
+                </button>
+                <section
+                  class="git-commit-files"
+                  data-git-target="commitFiles"
+                  aria-label="Файлы коммита"
+                  hidden
+                >
+                  <h3 class="git-panel-caption">Файлы коммита</h3>
+                  <div data-git-target="commitFileList" data-action="keydown->git#navigateList"></div>
+                </section>
+              </section>
+            </aside>
+            <section class="git-comparison" aria-label="Просмотр различий">
+              <header class="git-diff-toolbar">
+                <h3 data-git-target="heading">Изменения в проекте</h3>
+                <div class="git-diff-actions" data-git-target="diffControls" hidden>
+                  <div class="git-chunk-navigation">
+                    <button
+                      type="button"
+                      class="git-icon-button"
+                      data-git-target="previous"
+                      data-action="git#previousChange"
+                      title="Предыдущее изменение · Shift+F7"
+                      aria-label="Предыдущее изменение"
+                    >
+                      ↑
+                    </button>
+                    <span class="git-counter" data-git-target="counter" aria-live="polite"></span>
+                    <button
+                      type="button"
+                      class="git-icon-button"
+                      data-git-target="next"
+                      data-action="git#nextChange"
+                      title="Следующее изменение · F7"
+                      aria-label="Следующее изменение"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                  <select
+                    class="git-view-select"
+                    data-git-target="layout"
+                    data-action="change->git#toggleLayout"
+                    aria-label="Вид diff"
+                  >
+                    <option value="split">Две колонки</option>
+                    <option value="unified">Единый вид</option>
+                  </select>
+                  <button
+                    type="button"
+                    class="git-icon-button"
+                    data-git-target="wrapping"
+                    data-action="git#toggleWrapping"
+                    aria-label="Перенос строк"
+                    aria-pressed="true"
+                    title="Перенос строк"
+                  >
+                    ↵
+                  </button>
+                </div>
+              </header>
+              <div class="git-version-labels" data-git-target="versions" hidden>
+                <span data-git-target="beforeLabel"></span><span data-git-target="afterLabel"></span>
+              </div>
+              <div class="git-patch" tabindex="0" aria-label="Git diff" data-git-target="patch"></div>
+            </section>
           </div>
-          <div class="editor-host" data-editor-target="editor" hidden></div>
-        </div>
+        </section>
       </main>
 
       <div class="context-menu" data-tree-target="contextMenu" hidden>
@@ -605,177 +853,6 @@
             <button type="submit" class="btn btn-filled" data-tree-target="actionSubmit"></button>
           </div>
         </form>
-      </dialog>
-      <dialog
-        class="git-dialog"
-        data-git-target="dialog"
-        aria-labelledby="git-title"
-        data-action="cancel->git#disconnect keydown->git#diffKeydown resize@window->git#resizeDiff"
-      >
-        <header class="git-header">
-          <h2 id="git-title">Git</h2>
-          <div class="git-identity" data-git-target="controls" hidden>
-            <span class="git-root" data-git-target="repository"></span>
-            <span class="git-branch" data-git-target="branch"></span>
-          </div>
-          <button
-            type="button"
-            class="git-icon-button git-refresh"
-            data-action="git#refresh"
-            aria-label="Обновить"
-            title="Обновить"
-          >
-            ↻
-          </button>
-          <button
-            type="button"
-            class="git-icon-button"
-            data-action="git#close"
-            aria-label="Закрыть · Esc"
-            title="Закрыть · Esc"
-          >
-            ×
-          </button>
-        </header>
-        <button
-          class="btn btn-plain"
-          type="button"
-          data-git-target="mainFolder"
-          data-action="git#chooseMain"
-          hidden
-        >
-          Выбрать основной репозиторий
-        </button>
-        <p class="git-message" data-git-target="status" role="status"></p>
-        <div class="git-layout" data-git-target="content" hidden>
-          <aside class="git-navigation" aria-label="Навигация Git">
-            <div class="git-tabs" role="tablist" data-action="keydown->git#changeTab" aria-label="Раздел Git">
-              <button
-                type="button"
-                role="tab"
-                id="git-changes-tab"
-                aria-controls="git-changes-panel"
-                aria-selected="true"
-                data-git-target="changesTab"
-                data-mode="changes"
-                data-action="git#changeMode"
-              >
-                Изменения
-              </button>
-              <button
-                type="button"
-                role="tab"
-                id="git-history-tab"
-                aria-controls="git-history-panel"
-                aria-selected="false"
-                data-git-target="historyTab"
-                data-mode="history"
-                data-action="git#changeMode"
-              >
-                История
-              </button>
-            </div>
-            <section
-              id="git-changes-panel"
-              class="git-panel git-change-list"
-              role="tabpanel"
-              aria-labelledby="git-changes-tab"
-              data-git-target="changeSection"
-            >
-              <div data-git-target="changes" data-action="keydown->git#navigateList"></div>
-            </section>
-            <section
-              id="git-history-panel"
-              class="git-panel git-history-panel"
-              role="tabpanel"
-              aria-labelledby="git-history-tab"
-              data-git-target="historySection"
-              hidden
-            >
-              <h3 class="git-panel-caption" data-git-target="fileHistoryTitle">История коммитов</h3>
-              <button
-                type="button"
-                class="git-working-version"
-                data-git-target="workingVersion"
-                data-action="git#showWorking"
-                hidden
-              >
-                Рабочая версия
-              </button>
-              <div
-                class="git-history-list"
-                data-git-target="commits"
-                data-action="keydown->git#navigateList"
-              ></div>
-              <button class="git-more" type="button" data-git-target="more" data-action="git#older" hidden>
-                Показать ещё
-              </button>
-              <section
-                class="git-commit-files"
-                data-git-target="commitFiles"
-                aria-label="Файлы коммита"
-                hidden
-              >
-                <h3 class="git-panel-caption">Файлы коммита</h3>
-                <div data-git-target="commitFileList" data-action="keydown->git#navigateList"></div>
-              </section>
-            </section>
-          </aside>
-          <section class="git-comparison" aria-label="Просмотр различий">
-            <header class="git-diff-toolbar">
-              <h3 data-git-target="heading">Изменения в проекте</h3>
-              <div class="git-diff-actions" data-git-target="diffControls" hidden>
-                <div class="git-chunk-navigation">
-                  <button
-                    type="button"
-                    class="git-icon-button"
-                    data-git-target="previous"
-                    data-action="git#previousChange"
-                    title="Предыдущее изменение · Shift+F7"
-                    aria-label="Предыдущее изменение"
-                  >
-                    ↑
-                  </button>
-                  <span class="git-counter" data-git-target="counter" aria-live="polite"></span>
-                  <button
-                    type="button"
-                    class="git-icon-button"
-                    data-git-target="next"
-                    data-action="git#nextChange"
-                    title="Следующее изменение · F7"
-                    aria-label="Следующее изменение"
-                  >
-                    ↓
-                  </button>
-                </div>
-                <select
-                  class="git-view-select"
-                  data-git-target="layout"
-                  data-action="change->git#toggleLayout"
-                  aria-label="Вид diff"
-                >
-                  <option value="split">Две колонки</option>
-                  <option value="unified">Единый вид</option>
-                </select>
-                <button
-                  type="button"
-                  class="git-icon-button"
-                  data-git-target="wrapping"
-                  data-action="git#toggleWrapping"
-                  aria-label="Перенос строк"
-                  aria-pressed="true"
-                  title="Перенос строк"
-                >
-                  ↵
-                </button>
-              </div>
-            </header>
-            <div class="git-version-labels" data-git-target="versions" hidden>
-              <span data-git-target="beforeLabel"></span><span data-git-target="afterLabel"></span>
-            </div>
-            <div class="git-patch" tabindex="0" aria-label="Git diff" data-git-target="patch"></div>
-          </section>
-        </div>
       </dialog>
       <dialog class="project-search" data-search-target="searchDialog" aria-label="Поиск по проекту">
         <div class="search-header">

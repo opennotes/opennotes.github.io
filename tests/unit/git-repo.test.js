@@ -60,6 +60,21 @@ it("matches native Git status without changing the index and reads packed histor
   expect(await readFile(path.join(fixture.root, ".git/index"))).toEqual(indexBefore);
 });
 
+it("compares an unsaved draft without changing saved contents or staged comparisons", async () => {
+  await expect(repo.diff({ path: "note.md", area: "file", draft: "unsaved draft" })).resolves.toMatchObject({
+    before: "before\n",
+    after: "unsaved draft",
+  });
+  await expect(repo.diff({ path: "note.md", area: "staged", draft: "ignored draft" })).resolves.toMatchObject(
+    {
+      after: "staged\n",
+    },
+  );
+  await expect(repo.diff({ path: "note.md", area: "working" })).resolves.toMatchObject({
+    after: "working\n",
+  });
+});
+
 it("compares staged, working, deleted and untracked bytes and the initial commit", async () => {
   await expect(repo.diff({ path: "note.md", area: "staged" })).resolves.toMatchObject({
     before: "before\n",

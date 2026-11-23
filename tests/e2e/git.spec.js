@@ -32,7 +32,7 @@ test("Browser Git reads packed history, staged/working changes, deletions and li
   await openGitFolder(page, files);
   await expect(page.locator('[data-git-target="launch"]')).toHaveText("Git · main");
   await page.locator('[data-git-target="launch"]').click();
-  const dialog = page.getByRole("dialog", { name: "Git", exact: true });
+  const dialog = page.locator("#editor-diff-pane");
   const patch = dialog.locator(".git-patch");
   await dialog.locator('[data-area="working"][data-path="note.md"]').click();
   await expect(patch).toContainText("staged");
@@ -68,11 +68,11 @@ test("Browser Git explains folder access and fits a narrow screen", async ({ pag
   await page.goto("/edit.html");
   await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
   await page.locator('[data-git-target="launch"]').click();
-  const dialog = page.getByRole("dialog", { name: "Git", exact: true });
+  const dialog = page.locator("#editor-diff-pane");
   await expect(dialog.locator('[data-git-target="status"]')).toContainText("Откройте папку");
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await dialog.evaluate((element) => element.getBoundingClientRect().right <= innerWidth)).toBe(true);
-  await dialog.getByRole("button", { name: "Закрыть · Esc", exact: true }).click();
+  await dialog.getByRole("button", { name: "Закрыть вкладку изменений", exact: true }).click();
   await expect(dialog).not.toBeVisible();
 });
 
@@ -92,7 +92,7 @@ test("Linked worktrees request only the extra folder permission and read shared 
     await expect(page.locator(".app")).toHaveAttribute("data-ready", "true");
     await openGitFolder(page, linkedFiles);
     await page.locator('[data-git-target="launch"]').click();
-    const dialog = page.getByRole("dialog", { name: "Git", exact: true });
+    const dialog = page.locator("#editor-diff-pane");
     await expect(dialog.locator('[data-git-target="status"]')).toContainText("worktree");
     await storeGitFolder(page, mainFiles);
     await dialog.getByRole("button", { name: "Выбрать основной репозиторий" }).click();
@@ -115,7 +115,7 @@ test("File toolbar opens its history and a read-only side-by-side diff", async (
   await openGitFolder(page, files);
   await page.locator('.tree-item[data-path="note.md"] .label').click();
   await page.getByRole("button", { name: "История файла", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Git", exact: true });
+  const dialog = page.locator("#editor-diff-pane");
   await expect(dialog.locator('[data-git-target="fileHistoryTitle"]')).toHaveText("История · note.md");
   await expect(dialog.locator(".cm-merge-a .cm-content")).toContainText("before");
   await expect(dialog.locator(".cm-merge-b .cm-content")).toContainText("working");
@@ -152,7 +152,7 @@ test("Git navigation keeps the selected revision explicit and adapts narrow scre
   await page.goto("/edit.html");
   await openGitFolder(page, files);
   await page.locator('[data-git-target="launch"]').click();
-  const dialog = page.getByRole("dialog", { name: "Git", exact: true });
+  const dialog = page.locator("#editor-diff-pane");
   await expect(dialog.locator(".cm-editor")).toHaveCount(2);
   const changes = dialog.locator('[data-git-target="changes"]');
   await expect(changes.locator('[aria-current="true"]')).toHaveCount(1);
@@ -182,4 +182,85 @@ test("Git navigation keeps the selected revision explicit and adapts narrow scre
   await expect(dialog.getByRole("combobox", { name: "Вид diff" })).toHaveValue("unified");
   await expect(dialog.locator(".cm-editor")).toHaveCount(1);
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
+test("Editor tabs retain drafts and undo while the project tree stays usable", async ({
+  page,
+  browserName,
+}) => {
+  // Local folder grants require File System Access in Chromium.
+  test.skip(browserName !== "chromium", "Local folder grants require Chrome or Edge.");
+  await page.goto("/edit.html");
+  await openGitFolder(page, files);
+  const treeFile = page.locator('.tree-item[data-path="note.md"] .label');
+  await treeFile.click();
+  const editor = page.locator('[data-editor-target="editor"] .cm-content');
+  await editor.fill("draft before switching\n");
+  await page.getByRole("button", { name: "Изменения файла", exact: true }).click();
+  const diff = page.locator("#editor-diff-pane");
+  await expect(diff.locator(".git-patch")).toContainText("draft before switching");
+  await expect(diff.locator(".git-navigation")).toBeHidden();
+  await diff.getByRole("button", { name: "История файла", exact: true }).click();
+  await expect(diff.locator(".git-navigation")).toBeVisible();
+  await expect(diff.getByRole("button", { name: /Initial notes/ })).toBeVisible();
+  await diff.getByRole("tab", { name: "Изменения", exact: true }).click();
+  await expect(diff.locator(".git-navigation")).toBeHidden();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const fileTab = page.getByRole("tab", { name: "note.md", exact: true });
+  const diffTab = page.getByRole("tab", { name: "note.md · изменения", exact: true });
+  await fileTab.click();
+  await expect(editor).toContainText("draft before switching");
+  await editor.focus();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("second edit");
+  await diffTab.click();
+  await expect(diff.locator(".git-patch")).toContainText("second edit");
+  await fileTab.click();
+  await editor.focus();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(editor).not.toContainText("second edit");
+  await diffTab.click();
+  await expect(diff).toBeVisible();
+  await treeFile.click();
+  await expect(editor).toBeVisible();
+  await diffTab.click();
+  await page.locator('.tree-item[data-path="new note.md"] .label').click();
+  await expect(editor).toContainText("new note");
+  await expect(page.getByRole("tab", { name: "new note.md", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await diffTab.click();
+  await expect(diff.locator('[data-git-target="heading"]')).toHaveText("note.md");
+  await diff.getByRole("button", { name: "Закрыть вкладку изменений", exact: true }).click();
+  await expect(editor).toContainText("new note");
+  await expect(page.getByRole("tablist", { name: "Рабочая область", exact: true })).toBeHidden();
+});
+
+test("File and diff tabs preserve independent scroll positions for long documents", async ({
+  page,
+  browserName,
+}) => {
+  // Local folder grants require File System Access in Chromium.
+  test.skip(browserName !== "chromium", "Local folder grants require Chrome or Edge.");
+  await page.goto("/edit.html");
+  await openGitFolder(page, files);
+  await page.locator('.tree-item[data-path="note.md"] .label').click();
+  await page.locator('[data-editor-target="editor"] .cm-content').fill("long draft\n".repeat(180));
+  const fileScroll = page.locator('[data-editor-target="editor"] .cm-scroller');
+  await fileScroll.evaluate((element) => {
+    element.scrollTop = 600;
+  });
+  await expect.poll(() => fileScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(500);
+  await page.getByRole("button", { name: "Изменения файла", exact: true }).click();
+  const diffScroll = page.locator("#editor-diff-pane .cm-mergeView");
+  await expect(diffScroll).toBeVisible();
+  await diffScroll.evaluate((element) => {
+    element.scrollTop = 700;
+  });
+  await expect.poll(() => diffScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(600);
+  await page.getByRole("tab", { name: "note.md", exact: true }).click();
+  await expect.poll(() => fileScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(500);
+  await page.getByRole("tab", { name: "note.md · изменения", exact: true }).click();
+  await expect.poll(() => diffScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(600);
 });

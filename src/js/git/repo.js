@@ -223,10 +223,23 @@ export class Repo {
     const head = await this.head();
     const isHead = isStaged || area === "file";
     const before = await this.blob(path, isHead ? head : "INDEX");
-    const after = isStaged ? await this.blob(path, "INDEX") : await this.working(path);
+    const after = isStaged ? await this.blob(path, "INDEX") : await this.workingDraft(selection);
     const autocrlf = await git.getConfig({ ...this.options, path: "core.autocrlf" });
 
     return comparison({ path, before, after, autocrlf });
+  }
+  /**
+   * Use an open document's draft without writing it to disk.
+   *
+   * @param {object} selection - File path and optional editor draft.
+   * @returns {Uint8Array|Promise<Uint8Array|null>} Draft bytes or saved working contents.
+   */
+  workingDraft(selection) {
+    if (selection.draft !== undefined) {
+      return new TextEncoder().encode(selection.draft);
+    }
+
+    return this.working(selection.path);
   }
   /**
    * List only commits that changed the selected file.
