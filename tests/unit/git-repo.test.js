@@ -62,16 +62,20 @@ it("matches native Git status without changing the index and reads packed histor
 
 it("compares staged, working, deleted and untracked bytes and the initial commit", async () => {
   await expect(repo.diff({ path: "note.md", area: "staged" })).resolves.toMatchObject({
-    patch: expect.stringContaining("-before\n+staged"),
+    before: "before\n",
+    after: "staged\n",
   });
   await expect(repo.diff({ path: "note.md", area: "working" })).resolves.toMatchObject({
-    patch: expect.stringContaining("-staged\n+working"),
+    before: "staged\n",
+    after: "working\n",
   });
   await expect(repo.diff({ path: "deleted.md", area: "working" })).resolves.toMatchObject({
-    patch: expect.stringContaining("-gone"),
+    before: "gone\n",
+    after: "",
   });
   await expect(repo.diff({ path: "new note.md", area: "untracked" })).resolves.toMatchObject({
-    patch: expect.stringContaining("+new note"),
+    before: "",
+    after: "new note\n",
   });
   await expect(repo.commit(fixture.oid)).resolves.toMatchObject({
     files: expect.arrayContaining(["note.md", "deleted.md"]),

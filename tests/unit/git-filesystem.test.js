@@ -1,12 +1,9 @@
-import * as diff from "diff";
 import { expect, it, vi } from "vitest";
 
 import { GitFileSystem } from "../../src/js/git/filesystem.js";
 import { gitBranch, gitDirectories } from "../../src/js/git/metadata.js";
 import { comparison } from "../../src/js/git/patch.js";
 import { directory, fileHandle } from "../support/files.js";
-
-vi.mock("diff", { spy: true });
 
 function example() {
   const metadata = directory(".git", [fileHandle("HEAD", "ref: refs/heads/main\n")]);
@@ -112,23 +109,19 @@ it("requires a worktree grant and overlays private HEAD/index over common object
 
 it("renders bounded UTF-8 diffs and makes binary and oversized comparisons explicit", () => {
   const bytes = (value) => new TextEncoder().encode(value);
-  expect(comparison({ path: "note", before: bytes("before\n"), after: bytes("after\n") }).patch).toContain(
-    "-before\n+after",
-  );
+  expect(comparison({ path: "note", before: bytes("before\n"), after: bytes("after\n") })).toEqual({
+    path: "note",
+    before: "before\n",
+    after: "after\n",
+  });
   expect(comparison({ path: "binary", before: new Uint8Array([0]) }).patch).toContain("двоичный");
   expect(comparison({ path: "binary", after: new Uint8Array([0]) }).patch).toContain("двоичный");
   expect(comparison({ path: "invalid", after: new Uint8Array([255]) }).patch).toContain("не в UTF-8");
   expect(comparison({ path: "large", after: new Uint8Array(1_048_577) }).patch).toContain("слишком большой");
   expect(
     comparison({ path: "crlf", before: bytes("line\n"), after: bytes("line\r\n"), autocrlf: true }),
-  ).not.toContain("@@");
+  ).toMatchObject({ after: "line\n" });
   expect(
     comparison({ path: "crlf", before: bytes("line\n"), after: bytes("line\r\n"), autocrlf: "true" }),
-  ).not.toContain("@@");
-});
-
-it("explains a comparison that exceeds its processing budget", () => {
-  const patch = vi.spyOn(diff, "createTwoFilesPatch").mockReturnValueOnce();
-  expect(comparison({ path: "complex" }).patch).toContain("слишком сложное");
-  patch.mockRestore();
+  ).toMatchObject({ after: "line\n" });
 });
