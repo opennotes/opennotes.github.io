@@ -286,6 +286,7 @@ test("Cursor coordinates follow keyboard edits and disappear in previews", async
     buffer: Buffer.from("one\r\ntwo"),
   });
   await expect(position).toHaveText("Стр 1 · Стлб 1");
+  await expect(page.locator(".toolbar .file-info")).toContainText("Стр 1 · Стлб 1");
   await page.locator(".cm-content").focus();
   await page.keyboard.press("ControlOrMeta+End");
   await expect(position).toHaveText("Стр 2 · Стлб 4");
